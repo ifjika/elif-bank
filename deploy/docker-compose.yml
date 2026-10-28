@@ -1,0 +1,64 @@
+services:
+  # ---------------------------------------------------------------------------
+  # 1. Primary Database: MySQL 8.0 / TiDB Compatible
+  # Dokumen Terkait: docs/TSD.md (Seksi 1) & docs/ARCHITECTURE.md (Seksi 2)
+  # Fungsi: Ledger of Record, Double-Entry, Pessimistic Row Locking, Users & KYC
+  # Catatan: 100% kompatibel dengan TiDB Cloud Serverless (PingCAP)
+  # ---------------------------------------------------------------------------
+  mysql-tidb:
+    image: mysql:8.0
+    container_name: aethel-mysql-tidb
+    restart: unless-stopped
+    command:
+      - "--default-authentication-plugin=mysql_native_password"
+      - "--character-set-server=utf8mb4"
+      - "--collation-server=utf8mb4_unicode_ci"
+    environment:
+      MYSQL_DATABASE: aethel_bank_db
+      MYSQL_USER: aethel_user
+      MYSQL_PASSWORD: aethel_password_2026
+      MYSQL_ROOT_PASSWORD: aethel_root_password_2026
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_tidb_data:/var/lib/mysql
+      - ./migrations/mysql_tidb/000001_init_bank_schema.up.sql:/docker-entrypoint-initdb.d/01_init_bank.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-paethel_root_password_2026"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aethel-internal-net
+
+  # ---------------------------------------------------------------------------
+  # 2. Cache, Idempotency & Rate Limiting: Redis 7
+  # Dokumen Terkait: docs/SECURITY_GUIDE.md (Seksi 2.2) & docs/INTEGRATION.md
+  # Fungsi: SETNX Atomic Locks, Token Bucket Rate Limit, Replay Attack Shield
+  # ---------------------------------------------------------------------------
+  redis-cache:
+    image: redis:7-alpine
+    container_name: aethel-redis-cache
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "aethel_redis_password_2026"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_cache_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "aethel_redis_password_2026", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aethel-internal-net
+
+volumes:
+  mysql_tidb_data:
+    driver: local
+  redis_cache_data:
+    driver: local
+
+networks:
+  aethel-internal-net:
+    driver: bridge

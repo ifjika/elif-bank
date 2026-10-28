@@ -1,0 +1,9 @@
+go 1.23.0
+
+use (
+	./apps/api-gateway
+	./apps/core-ledger
+	./apps/simulator-cron
+	./apps/worker-eod
+	./pkg
+)

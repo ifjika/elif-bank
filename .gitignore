@@ -1,0 +1,24 @@
+# Environment Variables & Secrets
+.env
+*.env.local
+
+# Go Binaries & Build Cache
+bin/
+dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+cover.out
+coverage.html
+
+# IDEs & OS Files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
