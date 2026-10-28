@@ -22,3 +22,8 @@ coverage.html
 *.swo
 .DS_Store
 Thumbs.db
+
+# Agent & AI Directives (Local Only)
+AGENT.md
+docs/AGENT.md
+
