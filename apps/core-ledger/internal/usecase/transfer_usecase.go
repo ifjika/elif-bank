@@ -11,29 +11,29 @@ import (
 
 // ==============================================================================
 // Use Case: TransferUsecase
-// Dokumen Terkait: docs/TSD.md (Seksi 2.1 & 2.2) & docs/PRD.md (Seksi 3.2)
-// Fitur: Double-Entry Atomic Transfer dengan Lexicographical Row-Locking
+// Related Documents: docs/TSD.md (Section 2.1 & 2.2) & docs/PRD.md (Section 3.2)
+// Feature: Double-Entry Atomic Transfer with Lexicographical Row-Locking
 // ==============================================================================
 
-// TransferCommand merepresentasikan Data Transfer Object (DTO) untuk eksekusi transfer.
+// TransferCommand represents Data Transfer Object (DTO) for transfer execution.
 type TransferCommand struct {
-	ReferenceID            string `json:"reference_id"` // Kunci Idempotensi unik
-	SourceAccountID        string `json:"source_account_id"`
-	DestinationAccountID   string `json:"destination_account_id"`
-	Amount                 int64  `json:"amount"` // Nominal Rupiah (wajib > 0)
-	Description            string `json:"description"`
-	MakerID                string `json:"maker_id"`
+	ReferenceID          string `json:"reference_id"` // Unique client idempotency key
+	SourceAccountID      string `json:"source_account_id"`
+	DestinationAccountID string `json:"destination_account_id"`
+	Amount               int64  `json:"amount"` // IDR amount (must be > 0)
+	Description          string `json:"description"`
+	MakerID              string `json:"maker_id"`
 }
 
-// TransferResult memuat hasil eksekusi transfer yang berhasil dibukukan.
+// TransferResult contains execution result of committed transfer.
 type TransferResult struct {
-	TransactionID   string    `json:"transaction_id"`
-	ReferenceID     string    `json:"reference_id"`
-	Amount          int64     `json:"amount"`
-	SourceBalance   int64     `json:"source_balance_after"`
-	DestBalance     int64     `json:"dest_balance_after"`
-	Status          string    `json:"status"`
-	CreatedAt       time.Time `json:"created_at"`
+	TransactionID string    `json:"transaction_id"`
+	ReferenceID   string    `json:"reference_id"`
+	Amount        int64     `json:"amount"`
+	SourceBalance int64     `json:"source_balance_after"`
+	DestBalance   int64     `json:"dest_balance_after"`
+	Status        string    `json:"status"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 type TransferUsecase struct {
@@ -42,7 +42,7 @@ type TransferUsecase struct {
 	txManager   domain.TransactionManager
 }
 
-// NewTransferUsecase adalah konstruktor Go (Dependency Injection).
+// NewTransferUsecase is the constructor (Dependency Injection).
 func NewTransferUsecase(
 	accRepo domain.AccountRepository,
 	ledgerRepo domain.LedgerRepository,
@@ -55,9 +55,9 @@ func NewTransferUsecase(
 	}
 }
 
-// Execute menjalankan transfer dana atomik berstandar ACID.
+// Execute performs atomic ACID double-entry funds transfer.
 func (u *TransferUsecase) Execute(ctx context.Context, cmd TransferCommand) (*TransferResult, error) {
-	// 1. Validasi Awal DTO
+	// 1. Initial DTO validation
 	if cmd.Amount <= 0 {
 		return nil, domain.ErrInvalidAmount
 	}
@@ -67,13 +67,13 @@ func (u *TransferUsecase) Execute(ctx context.Context, cmd TransferCommand) (*Tr
 
 	var result *TransferResult
 
-	// 2. Jalankan seluruh proses di dalam satu transaksi database ACID (docs/TSD.md)
+	// 2. Execute within an ACID database transaction (docs/TSD.md)
 	err := u.txManager.ExecuteInTransaction(ctx, func(txCtx context.Context) error {
-		// 3. Algoritma Lexicographical Locking: Tentukan urutan penguncian berdasarkan abjad ID
-		// Hal ini menjamin TIDAK AKAN PERNAH terjadi deadlock saat dua rekening saling mentransfer
+		// 3. Lexicographical Locking: Sort account IDs alphabetically
+		// Guarantees zero deadlocks when two accounts transfer to each other simultaneously
 		firstID, secondID := sortIDs(cmd.SourceAccountID, cmd.DestinationAccountID)
 
-		// 4. Kunci baris akun pertama, lalu akun kedua (SELECT ... FOR UPDATE)
+		// 4. Lock first account row, then second account row (SELECT ... FOR UPDATE)
 		accFirst, err := u.accountRepo.GetByIDWithLock(txCtx, firstID)
 		if err != nil {
 			return fmt.Errorf("failed to lock account %s: %w", firstID, err)
@@ -90,7 +90,7 @@ func (u *TransferUsecase) Execute(ctx context.Context, cmd TransferCommand) (*Tr
 			return domain.ErrAccountNotFound
 		}
 
-		// Identifikasi mana akun sumber dan mana akun tujuan
+		// Identify source and destination accounts
 		var sourceAcc, destAcc *domain.Account
 		if accFirst.ID == cmd.SourceAccountID {
 			sourceAcc, destAcc = accFirst, accSecond
@@ -98,7 +98,7 @@ func (u *TransferUsecase) Execute(ctx context.Context, cmd TransferCommand) (*Tr
 			sourceAcc, destAcc = accSecond, accFirst
 		}
 
-		// 5. Eksekusi Mutasi Saldo di Memori (Domain Methods)
+		// 5. In-Memory Domain Balance Mutations
 		if err := sourceAcc.Debit(cmd.Amount); err != nil {
 			return err
 		}
@@ -106,10 +106,10 @@ func (u *TransferUsecase) Execute(ctx context.Context, cmd TransferCommand) (*Tr
 			return err
 		}
 
-		// 6. Buat Header Transaksi Finansial
+		// 6. Create Transaction Header
 		now := time.Now().UTC()
 		txHeader := &domain.Transaction{
-			ID:              cmd.ReferenceID, // Menggunakan reference ID sebagai identitas utama atau bisa UUID
+			ID:              cmd.ReferenceID,
 			ReferenceID:     cmd.ReferenceID,
 			TransactionType: domain.TxTypeTransfer,
 			Amount:          cmd.Amount,
@@ -123,7 +123,7 @@ func (u *TransferUsecase) Execute(ctx context.Context, cmd TransferCommand) (*Tr
 			return fmt.Errorf("failed to persist transaction header: %w", err)
 		}
 
-		// 7. Ambil Hash Mutasi Sebelumnya untuk Membentuk SHA-256 Audit Chain
+		// 7. Retrieve Prior Hashes for SHA-256 Audit Chaining
 		prevHashSource, err := u.ledgerRepo.GetLatestEntryHash(txCtx, sourceAcc.ID)
 		if err != nil {
 			return fmt.Errorf("failed to get previous hash for source: %w", err)
@@ -134,16 +134,16 @@ func (u *TransferUsecase) Execute(ctx context.Context, cmd TransferCommand) (*Tr
 			return fmt.Errorf("failed to get previous hash for destination: %w", err)
 		}
 
-		// 8. Hitung Hash Rantai Mutasi Baru (docs/TSD.md Seksi 2.2)
+		// 8. Compute New Hashes (docs/TSD.md Section 2.2)
 		currentHashSource := hashchain.ComputeHash(prevHashSource, sourceAcc.ID, cmd.Amount, sourceAcc.Balance, now)
 		currentHashDest := hashchain.ComputeHash(prevHashDest, destAcc.ID, cmd.Amount, destAcc.Balance, now)
 
-		// 9. Bentuk Sepasang Entri Jurnal Berpasangan (Double-Entry Invariant: Debit == Kredit)
+		// 9. Build Balanced Double-Entry Journal Rows (Debit == Credit)
 		entries := []domain.LedgerEntry{
 			{
 				TransactionID: txHeader.ID,
 				AccountID:     sourceAcc.ID,
-				EntryType:     domain.EntryTypeDebit, // Akun sumber berkurang (Debit Liability)
+				EntryType:     domain.EntryTypeDebit, // Source account decreases (Debit Liability)
 				Amount:        cmd.Amount,
 				BalanceAfter:  sourceAcc.Balance,
 				PreviousHash:  prevHashSource,
@@ -153,7 +153,7 @@ func (u *TransferUsecase) Execute(ctx context.Context, cmd TransferCommand) (*Tr
 			{
 				TransactionID: txHeader.ID,
 				AccountID:     destAcc.ID,
-				EntryType:     domain.EntryTypeCredit, // Akun tujuan bertambah (Kredit Liability)
+				EntryType:     domain.EntryTypeCredit, // Destination account increases (Credit Liability)
 				Amount:        cmd.Amount,
 				BalanceAfter:  destAcc.Balance,
 				PreviousHash:  prevHashDest,
@@ -166,7 +166,7 @@ func (u *TransferUsecase) Execute(ctx context.Context, cmd TransferCommand) (*Tr
 			return fmt.Errorf("failed to persist ledger entries: %w", err)
 		}
 
-		// 10. Update Saldo Akun di Database
+		// 10. Persist Account Balances to Database
 		if err := u.accountRepo.UpdateBalance(txCtx, sourceAcc); err != nil {
 			return fmt.Errorf("failed to update source balance: %w", err)
 		}
@@ -174,7 +174,7 @@ func (u *TransferUsecase) Execute(ctx context.Context, cmd TransferCommand) (*Tr
 			return fmt.Errorf("failed to update destination balance: %w", err)
 		}
 
-		// 11. Simpan Event ke Outbox untuk Notifikasi Kafka
+		// 11. Write Transactional Outbox Event for Kafka Publishing
 		outboxPayload := fmt.Sprintf(`{"transaction_id":"%s","amount":%d,"source":"%s","destination":"%s"}`,
 			txHeader.ID, cmd.Amount, sourceAcc.AccountNumber, destAcc.AccountNumber)
 		if err := u.ledgerRepo.CreateOutboxEvent(txCtx, "TRANSACTION_POSTED", txHeader.ID, []byte(outboxPayload)); err != nil {
@@ -201,7 +201,7 @@ func (u *TransferUsecase) Execute(ctx context.Context, cmd TransferCommand) (*Tr
 	return result, nil
 }
 
-// sortIDs mengurutkan dua ID akun secara alfabetis untuk mencegah cyclic deadlock.
+// sortIDs lexicographically sorts two account IDs to prevent cyclic deadlocks.
 func sortIDs(idA, idB string) (string, string) {
 	if idA < idB {
 		return idA, idB

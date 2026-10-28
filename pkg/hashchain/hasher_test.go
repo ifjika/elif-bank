@@ -13,12 +13,12 @@ func TestHashChain_DeterministicAndVerify(t *testing.T) {
 		t.Fatalf("expected 64 characters hex SHA-256 string, got len=%d", len(hash1))
 	}
 
-	// Verifikasi hash cocok
+	// Verify valid payload hash match
 	if !VerifyHash(GenesisHash, "acc-001", 100000, 100000, now, hash1) {
 		t.Error("VerifyHash failed on valid payload")
 	}
 
-	// Verifikasi jika data dimanipulasi (tampered)
+	// Verify rejection when data is tampered
 	if VerifyHash(GenesisHash, "acc-001", 99999, 100000, now, hash1) {
 		t.Error("VerifyHash should have failed on tampered amount")
 	}

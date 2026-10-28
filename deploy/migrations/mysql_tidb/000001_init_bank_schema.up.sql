@@ -1,11 +1,11 @@
 -- ==============================================================================
 -- Migration: 000001_init_bank_schema.up.sql (MySQL 8.0 & TiDB Compatible)
--- Dokumen Terkait: docs/TSD.md (Seksi 1) & docs/PRD.md
+-- Related Documents: docs/TSD.md (Section 1) & docs/PRD.md
 -- Engine: InnoDB / TiKV Distributed Storage
--- Karakter: utf8mb4 dengan presisi mikrodetik pada timestamp
+-- Character set: utf8mb4 with microsecond precision on timestamps
 -- ==============================================================================
 
--- 1. Tabel Kantor Cabang Bank
+-- 1. Bank Branches Table
 CREATE TABLE IF NOT EXISTS bank_branches (
     id VARCHAR(36) PRIMARY KEY,
     branch_code VARCHAR(10) NOT NULL UNIQUE,
@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS bank_branches (
     updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 2. Tabel Pengguna Aplikasi & Hak Akses (RBAC)
+-- 2. Application Users Table (RBAC)
 CREATE TABLE IF NOT EXISTS app_users (
     id VARCHAR(36) PRIMARY KEY,
     username VARCHAR(50) NOT NULL UNIQUE,
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS app_users (
     CONSTRAINT fk_users_branch FOREIGN KEY (branch_id) REFERENCES bank_branches(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 3. Tabel Rekening Nasabah & Akun Internal Buku Besar (Chart of Accounts)
+-- 3. Customer Accounts & General Ledger Chart of Accounts (COA)
 CREATE TABLE IF NOT EXISTS accounts (
     id VARCHAR(36) PRIMARY KEY,
     account_number VARCHAR(32) NOT NULL UNIQUE,
@@ -49,15 +49,15 @@ CREATE TABLE IF NOT EXISTS accounts (
     CONSTRAINT chk_positive_hold CHECK (hold_balance >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 4. Tabel Header Transaksi Finansial
+-- 4. Financial Transactions Header Table
 CREATE TABLE IF NOT EXISTS transactions (
     id VARCHAR(36) PRIMARY KEY,
-    reference_id VARCHAR(64) NOT NULL UNIQUE, -- Kunci Idempotensi Klien
+    reference_id VARCHAR(64) NOT NULL UNIQUE, -- Client idempotency key
     transaction_type VARCHAR(32) NOT NULL,    -- TRANSFER, CASH_DEPOSIT, CASH_WITHDRAWAL, FEE, INTEREST
     amount BIGINT NOT NULL,
     description TEXT NOT NULL,
     maker_id VARCHAR(64) NOT NULL,
-    checker_id VARCHAR(64) NULL,              -- Otorisasi Supervisor
+    checker_id VARCHAR(64) NULL,              -- Authorizing Supervisor
     status ENUM('POSTED', 'PENDING_APPROVAL', 'REJECTED') NOT NULL DEFAULT 'POSTED',
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     INDEX idx_tx_created (created_at DESC),
@@ -66,15 +66,15 @@ CREATE TABLE IF NOT EXISTS transactions (
     CONSTRAINT chk_tx_amount CHECK (amount > 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 5. Tabel Jurnal Entri Buku Besar (Double-Entry Mutation Rows)
+-- 5. General Ledger Journal Entries (Double-Entry Mutation Rows)
 CREATE TABLE IF NOT EXISTS ledger_entries (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     transaction_id VARCHAR(36) NOT NULL,
     account_id VARCHAR(36) NOT NULL,
-    entry_type ENUM('DR', 'CR') NOT NULL,     -- 'DR' (Debit) atau 'CR' (Kredit)
+    entry_type ENUM('DR', 'CR') NOT NULL,     -- 'DR' (Debit) or 'CR' (Credit)
     amount BIGINT NOT NULL,
     balance_after BIGINT NOT NULL,
-    previous_hash VARCHAR(64) NOT NULL,       -- SHA-256 chain dari baris akun sebelumnya
+    previous_hash VARCHAR(64) NOT NULL,       -- SHA-256 chain from prior account row
     current_hash VARCHAR(64) NOT NULL,        -- SHA-256(prev + account + amount + balanceAfter + timestamp)
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     INDEX idx_entries_account_created (account_id, created_at DESC),
@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS ledger_entries (
     CONSTRAINT chk_entry_amount CHECK (amount > 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 6. Tabel Transactional Outbox (Penerbitan Event Asinkron ke Kafka)
+-- 6. Transactional Outbox Table (Asynchronous Event Publishing to Kafka)
 CREATE TABLE IF NOT EXISTS outbox_events (
     id VARCHAR(36) PRIMARY KEY,
     aggregate_type VARCHAR(32) NOT NULL,

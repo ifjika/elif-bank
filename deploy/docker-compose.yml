@@ -1,9 +1,9 @@
 services:
   # ---------------------------------------------------------------------------
   # 1. Primary Database: MySQL 8.0 / TiDB Compatible
-  # Dokumen Terkait: docs/TSD.md (Seksi 1) & docs/ARCHITECTURE.md (Seksi 2)
-  # Fungsi: Ledger of Record, Double-Entry, Pessimistic Row Locking, Users & KYC
-  # Catatan: 100% kompatibel dengan TiDB Cloud Serverless (PingCAP)
+  # Related Documents: docs/TSD.md (Section 1) & docs/ARCHITECTURE.md (Section 2)
+  # Purpose: Ledger of Record, Double-Entry, Pessimistic Row Locking, Users & KYC
+  # Note: 100% compatible with TiDB Cloud Serverless (PingCAP)
   # ---------------------------------------------------------------------------
   mysql-tidb:
     image: mysql:8.0
@@ -33,8 +33,8 @@ services:
 
   # ---------------------------------------------------------------------------
   # 2. Cache, Idempotency & Rate Limiting: Redis 7
-  # Dokumen Terkait: docs/SECURITY_GUIDE.md (Seksi 2.2) & docs/INTEGRATION.md
-  # Fungsi: SETNX Atomic Locks, Token Bucket Rate Limit, Replay Attack Shield
+  # Related Documents: docs/SECURITY_GUIDE.md (Section 2.2) & docs/INTEGRATION.md
+  # Purpose: SETNX Atomic Locks, Token Bucket Rate Limit, Replay Attack Shield
   # ---------------------------------------------------------------------------
   redis-cache:
     image: redis:7-alpine

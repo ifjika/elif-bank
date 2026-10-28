@@ -1,70 +1,75 @@
 # Security Guide & Threat Modeling: AethelCore Engine
 
-Dokumen ini mendokumentasikan kebijakan keamanan siber, matriks otorisasi berbasis peran (RBAC), mitigasi model ancaman (OWASP Top 10 API Security), aturan sanitasi input, dan manajemen rahasia (*secrets management*).
+This document outlines cybersecurity policies, the role-based access control (RBAC) matrix, threat modeling mitigations (OWASP Top 10 API Security), input sanitization rules, and secrets management standards.
 
 ---
 
-## 1. Matriks Otorisasi Berbasis Peran (RBAC Matrix)
+## 1. Role-Based Access Control Matrix (RBAC Matrix)
 
-Sistem membedakan hak akses berdasarkan klaim token JWT pengguna:
+Access permissions are enforced based on the caller's verified JWT claims:
 
-| Modul / Endpoint | Nasabah (Customer) | Teller (Maker) | Supervisor (Checker) | System Admin |
-| :--- | :---: | :---: | :---: | :---: |
-| **Cek Saldo Akun Sendiri** | ✅ | ❌ | ❌ | ❌ |
-| **Transfer P2P Antar-Rekening** | ✅ (Limit Rp 25 Jt) | ❌ | ❌ | ❌ |
-| **Cek Informasi Rekening Nasabah** | ❌ | ✅ | ✅ | ✅ |
-| **Input Setor/Tarik Kas Cabang** | ❌ | ✅ (Maker) | ❌ | ❌ |
-| **Approve Transaksi Kas > 50 Juta** | ❌ | ❌ | ✅ (Checker) | ❌ |
-| **Memicu Eksekusi Manual EOD** | ❌ | ❌ | ❌ | ✅ |
-| **Akses GraphQL Audit & Log** | ❌ | ❌ | ✅ | ✅ |
+| Module / Endpoint                           |      Customer      | Teller (Maker) | Supervisor (Checker) | System Admin |
+| :------------------------------------------ | :----------------: | :------------: | :------------------: | :----------: |
+| **Check Own Account Balance**               |         ✅         |       ❌       |          ❌          |      ❌      |
+| **P2P Funds Transfer**                      | ✅ (IDR 25M Limit) |       ❌       |          ❌          |      ❌      |
+| **View Customer Account Details**           |         ❌         |       ✅       |          ✅          |      ✅      |
+| **Initiate Branch Cash Deposit/Withdrawal** |         ❌         |   ✅ (Maker)   |          ❌          |      ❌      |
+| **Approve Cash Transaction > 50M**          |         ❌         |       ❌       |     ✅ (Checker)     |      ❌      |
+| **Trigger Manual EOD Batch Execution**      |         ❌         |       ❌       |          ❌          |      ✅      |
+| **Access GraphQL Audit & System Logs**      |         ❌         |       ❌       |          ✅          |      ✅      |
 
-### 1.1 Aturan Maker-Checker Kriptografis (Anti-Self-Approval)
-1. **Validasi Identitas Ganda**: Backend secara tegas memverifikasi:
+### 1.1 Cryptographic Maker-Checker Rules (Anti-Self-Approval)
+
+1. **Dual Identity Verification**: The backend strictly validates:
    $$\text{maker\_id} \neq \text{checker\_id}$$
-2. **Kunci Verifikasi Terpisah**: Token JWT untuk Maker dan Checker ditandatangani menggunakan *keypair* atau *claims* khusus yang diverifikasi secara independen oleh API Gateway.
+2. **Distinct Keypairs/Claims**: JWT tokens for Makers and Checkers are signed with distinctive keys or specific role claims independently verified by the API Gateway.
 
 ---
 
-## 2. Mitigasi Model Ancaman (Threat Modeling - OWASP API Security)
+## 2. Threat Modeling Mitigations (OWASP API Security)
 
 ### 2.1 Broken Object Level Authorization (BOLA / IDOR)
-* **Vektor Serangan**: Nasabah jahat mengganti parameter `account_id` pada URL request untuk membaca saldo atau mendebit rekening nasabah lain.
-* **Mitigasi**:
-  * API Gateway memverifikasi kecocokan antara `account_id` di database dengan `customer_id` yang tertera secara kriptografis di dalam payload JWT pemanggil.
-  * Nasabah tidak pernah diizinkan mengirim `source_account_id` bebas tanpa validasi kepemilikan.
+
+- **Attack Vector**: A malicious customer alters the `account_id` route parameter to view balances or initiate unauthorized transfers from another customer's account.
+- **Mitigation**:
+  - The API Gateway cross-verifies that the target `account_id` in the database belongs to the `customer_id` cryptographically signed inside the caller's JWT token.
+  - Customers cannot submit arbitrary `source_account_id` values without ownership validation.
 
 ### 2.2 Replay Attacks & Network Retries
-* **Vektor Serangan**: Jaringan internet seluler nasabah mengalami *drop*, menyebabkan aplikasi mobile mengirimkan ulang payload transfer beberapa kali secara otomatis, memicu pemotongan saldo berkali-kali.
-* **Mitigasi**:
-  * Penerapan header wajib **`X-Idempotency-Key`** (berisi UUID unik yang dibuat oleh aplikasi mobile).
-  * Gateway melakukan atomic acquire pada Redis:
+
+- **Attack Vector**: Cellular network drops cause client applications to retransmit transfer requests, triggering multiple balance debits.
+- **Mitigation**:
+  - Mandatory **`X-Idempotency-Key`** header (unique client-generated UUIDv4).
+  - Gateway performs atomic key acquisition in Redis:
     ```go
-    // Status awal disimpan dalam Redis dengan TTL 24 jam
+    // Initial status stored in Redis with 24-hour TTL
     SETNX idempotency:{key} "PROCESSING" EX 86400
     ```
-  * Jika kunci sudah ada dan statusnya `SUCCESS`, Gateway langsung mengembalikan salinan respons sebelumnya tanpa menyentuh database transaksi.
+  - If the key already exists with status `SUCCESS`, the Gateway immediately replays the cached response without touching the core transaction database.
 
-### 2.3 Race Condition & Saldo Negatif (Concurrency Attacks)
-* **Vektor Serangan**: Nasabah melakukan 10 transaksi penarikan simultan senilai Rp 1.000.000 dari saldo awal yang hanya sebesar Rp 1.000.000 menggunakan bot terdistribusi.
-* **Mitigasi**:
-  * Penguncian baris database mutlak menggunakan `SELECT balance FROM accounts WHERE id = $1 FOR UPDATE`.
-  * Penambahan constraint database: `CONSTRAINT chk_positive_balance CHECK (balance >= 0)`.
-  * Jika saldo kurang, transaksi otomatis gagal dan di-rollback seketika.
+### 2.3 Race Conditions & Negative Balances (Concurrency Attacks)
+
+- **Attack Vector**: A customer initiates 10 simultaneous IDR 1,000,000 withdrawals from an account with only IDR 1,000,000 balance using distributed automated bots.
+- **Mitigation**:
+  - Strict pessimistic row-level locking: `SELECT balance FROM accounts WHERE id = $1 FOR UPDATE`.
+  - Database-level check constraint: `CONSTRAINT chk_positive_balance CHECK (balance >= 0)`.
+  - If available funds are insufficient, the transaction fails and rolls back instantly.
 
 ### 2.4 SQL Injection & Mass Assignment
-* **Vektor Serangan**: Memasukkan karakter kutip atau instruksi SQL berbahaya pada kolom deskripsi transaksi atau pencarian nama.
-* **Mitigasi**:
-  * Larangan keras merangkai string SQL (*string concatenation*). Seluruh query SQL wajib menggunakan *parameterized queries* bawaan driver `pgx` dan `sqlx`.
-  * Sanitasi dan validasi format input DTO menggunakan pustaka `go-playground/validator`.
+
+- **Attack Vector**: Injecting malicious SQL syntax into transaction description or name search fields.
+- **Mitigation**:
+  - Strict prohibition of dynamic SQL string concatenation. All SQL queries use parameterized placeholders via `pgx` and `sqlx`.
+  - Input payload sanitization and schema validation using `go-playground/validator`.
 
 ---
 
-## 3. Manajemen Rahasia & Kunci (Secrets Management)
+## 3. Secrets Management & Credential Safety
 
-1. **Prinsip Nol Rahasia pada Kode (*Zero Hardcoded Secrets*)**:
-   * Password database, private key JWT, dan token Redis dilarang keras disimpan di dalam source code repository.
-   * Seluruh konfigurasi diinjeksi melalui *Environment Variables* atau file `.env` yang terdaftar pada `.gitignore`.
-2. **Hashing Password Kredensial**:
-   * Seluruh kata sandi pengguna di tabel `app_users` di-hash menggunakan algoritma **Argon2id** atau **Bcrypt** dengan *cost factor* $\ge 12$.
-3. **Penyimpanan Jejak Audit Tanpa Data PII Terbuka**:
-   * Log transaksi yang dicatat ke sistem telemetri (Stdout, Grafana Loki) tidak boleh memuat nomor PIN, CVV kartu, atau token otentikasi utuh.
+1. **Zero Hardcoded Secrets Policy**:
+   - Database credentials, JWT private keys, and Redis authentication tokens must never be committed to source code repositories.
+   - All configurations are injected via Environment Variables or `.env` files explicitly listed in `.gitignore`.
+2. **Credential Password Hashing**:
+   - All user passwords in `app_users` are salted and hashed using **Argon2id** or **Bcrypt** with a work factor $\ge 12$.
+3. **Audit Trails Without Sensitive PII**:
+   - Application telemetry logs (Stdout, Grafana Loki) must redact raw PINs, card CVVs, and complete authorization tokens.

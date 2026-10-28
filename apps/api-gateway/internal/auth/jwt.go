@@ -10,8 +10,8 @@ import (
 
 // ==============================================================================
 // Module auth: JWT Token Management & Cryptographic Claims
-// Dokumen Terkait: docs/SECURITY_GUIDE.md (Seksi 1) & docs/INTEGRATION.md (Seksi 2.1)
-// Fungsi: Menerbitkan dan memvalidasi token JWT untuk Nasabah, Maker, dan Checker
+// Related Documents: docs/SECURITY_GUIDE.md (Section 1) & docs/INTEGRATION.md (Section 2.1)
+// Purpose: Issue and validate JWT tokens for Customers, Makers, and Checkers
 // ==============================================================================
 
 var (
@@ -19,18 +19,18 @@ var (
 	ErrExpiredToken = errors.New("authentication token has expired")
 )
 
-// UserRole memetakan hak akses peran dalam ekosistem perbankan.
+// UserRole maps role-based access permissions within the banking ecosystem.
 type UserRole string
 
 const (
 	RoleCustomer   UserRole = "CUSTOMER"
-	RoleTeller     UserRole = "TELLER"     // Maker kas cabang
-	RoleSupervisor UserRole = "SUPERVISOR" // Checker otorisasi kas cabang
+	RoleTeller     UserRole = "TELLER"     // Branch cash Maker
+	RoleSupervisor UserRole = "SUPERVISOR" // Branch cash authorization Checker
 	RoleAdmin      UserRole = "ADMIN"
 )
 
-// BankClaims adalah payload data yang tertanam di dalam token JWT.
-// Menggunakan struct embedding jwt.RegisteredClaims untuk standar RFC 7519.
+// BankClaims represents the embedded claim payload in JWT tokens.
+// Uses struct embedding with jwt.RegisteredClaims per RFC 7519.
 type BankClaims struct {
 	UserID   string   `json:"user_id"`
 	Username string   `json:"username"`
@@ -39,13 +39,13 @@ type BankClaims struct {
 	jwt.RegisteredClaims
 }
 
-// TokenManager mengelola siklus pembuatan dan verifikasi token.
+// TokenManager manages token generation and verification lifecycle.
 type TokenManager struct {
 	secretKey     []byte
 	tokenDuration time.Duration
 }
 
-// NewTokenManager membuat instance TokenManager baru.
+// NewTokenManager creates a new TokenManager instance.
 func NewTokenManager(secretKey string, tokenDuration time.Duration) *TokenManager {
 	return &TokenManager{
 		secretKey:     []byte(secretKey),
@@ -53,7 +53,7 @@ func NewTokenManager(secretKey string, tokenDuration time.Duration) *TokenManage
 	}
 }
 
-// GenerateToken membuat token JWT baru bertanda tangan kriptografis HMAC-SHA256.
+// GenerateToken generates a new JWT token signed with HMAC-SHA256.
 func (m *TokenManager) GenerateToken(userID, username string, role UserRole, branchID string) (string, error) {
 	now := time.Now().UTC()
 	claims := BankClaims{
@@ -69,7 +69,7 @@ func (m *TokenManager) GenerateToken(userID, username string, role UserRole, bra
 		},
 	}
 
-	// Gunakan algoritma HMAC SHA-256 (SigningMethodHS256)
+	// Use HMAC SHA-256 algorithm (SigningMethodHS256)
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	signedString, err := token.SignedString(m.secretKey)
 	if err != nil {
@@ -79,11 +79,11 @@ func (m *TokenManager) GenerateToken(userID, username string, role UserRole, bra
 	return signedString, nil
 }
 
-// VerifyToken memvalidasi keaslian signature dan masa berlaku token JWT.
+// VerifyToken validates cryptographic signature and expiration of JWT token.
 func (m *TokenManager) VerifyToken(tokenString string) (*BankClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &BankClaims{}, func(t *jwt.Token) (interface{}, error) {
-		// Proteksi Algorithm Confusion Attack:
-		// Wajib memastikan bahwa algoritma penandatanganan adalah HMAC SHA-256 asli
+		// Algorithm Confusion Attack Protection:
+		// Ensure signing method is strictly HMAC SHA-256
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected token signing algorithm: %v", t.Header["alg"])
 		}

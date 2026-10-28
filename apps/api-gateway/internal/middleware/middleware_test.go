@@ -12,17 +12,17 @@ import (
 
 // ==============================================================================
 // Unit Test: Auth & RBAC Middleware
-// Dokumen Terkait: docs/TESTING_GUIDE.md & docs/SECURITY_GUIDE.md
+// Related Documents: docs/TESTING_GUIDE.md & docs/SECURITY_GUIDE.md
 // ==============================================================================
 
 func init() {
-	// Set Gin mode ke TestMode agar tidak mencetak log berisik saat unit test
+	// Set Gin to TestMode to suppress verbose logging during test runs
 	gin.SetMode(gin.TestMode)
 }
 
 func TestAuthMiddleware_ValidToken(t *testing.T) {
 	tokenManager := auth.NewTokenManager("test-secret-key-at-least-32-bytes-long", 1*time.Hour)
-	validToken, err := tokenManager.GenerateToken("usr_123", "nasabah_ani", auth.RoleCustomer, "")
+	validToken, err := tokenManager.GenerateToken("usr_123", "customer_ani", auth.RoleCustomer, "")
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
 	}
@@ -66,11 +66,11 @@ func TestAuthMiddleware_MissingHeader(t *testing.T) {
 
 func TestAuthMiddleware_ForbiddenRole(t *testing.T) {
 	tokenManager := auth.NewTokenManager("test-secret-key-at-least-32-bytes-long", 1*time.Hour)
-	// Nasabah biasa mencoba mengakses endpoint khusus SUPERVISOR
-	customerToken, _ := tokenManager.GenerateToken("usr_456", "nasabah_budi", auth.RoleCustomer, "")
+	// Regular customer attempts to access a SUPERVISOR-only route
+	customerToken, _ := tokenManager.GenerateToken("usr_456", "customer_budi", auth.RoleCustomer, "")
 
 	router := gin.New()
-	router.Use(AuthMiddleware(tokenManager, auth.RoleSupervisor)) // Hanya izinkan SUPERVISOR
+	router.Use(AuthMiddleware(tokenManager, auth.RoleSupervisor)) // Restrict to SUPERVISOR only
 	router.GET("/supervisor-only", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})

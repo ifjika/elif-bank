@@ -7,8 +7,8 @@ import (
 
 // ==============================================================================
 // Domain Entity: Transaction
-// Dokumen Terkait: docs/TSD.md (Seksi 1.1) & docs/PRD.md (Seksi 3.3)
-// Fungsi: Header transaksi finansial yang mencatat Maker, Checker, dan Status
+// Related Documents: docs/TSD.md (Section 1.1) & docs/PRD.md (Section 3.3)
+// Purpose: Financial transaction header tracking Maker, Checker, and Status
 // ==============================================================================
 
 type TransactionType string
@@ -29,25 +29,25 @@ const (
 	TxStatusRejected        TransactionStatus = "REJECTED"
 )
 
-// Transaction mencatat riwayat induk transaksi finansial.
+// Transaction records financial transaction headers.
 type Transaction struct {
 	ID              string            `json:"id"`
-	ReferenceID     string            `json:"reference_id"` // Kunci idempotensi
+	ReferenceID     string            `json:"reference_id"` // Client idempotency key
 	TransactionType TransactionType   `json:"transaction_type"`
-	Amount          int64             `json:"amount"` // Nominal transaksi (Rupiah integer)
+	Amount          int64             `json:"amount"` // Transaction amount (integer IDR)
 	Description     string            `json:"description"`
-	MakerID         string            `json:"maker_id"`            // Identitas Teller atau Nasabah pembuat
-	CheckerID       *string           `json:"checker_id,omitempty"` // Identitas Supervisor (jika butuh approval)
+	MakerID         string            `json:"maker_id"`             // Initiating Teller or Customer ID
+	CheckerID       *string           `json:"checker_id,omitempty"` // Authorizing Supervisor ID (if required)
 	Status          TransactionStatus `json:"status"`
 	CreatedAt       time.Time         `json:"created_at"`
 }
 
-// Approve memproses persetujuan transaksi oleh Supervisor (Checker).
+// Approve processes transaction approval by a Supervisor (Checker).
 func (t *Transaction) Approve(checkerID string) error {
 	if t.Status != TxStatusPendingApproval {
 		return errors.New("transaction is not pending approval")
 	}
-	// Aturan Anti-Self-Approval (docs/SECURITY_GUIDE.md Seksi 1.1)
+	// Anti-Self-Approval Enforcement (docs/SECURITY_GUIDE.md Section 1.1)
 	if t.MakerID == checkerID {
 		return errors.New("maker and checker cannot be the same user")
 	}
@@ -56,7 +56,7 @@ func (t *Transaction) Approve(checkerID string) error {
 	return nil
 }
 
-// Reject menolak transaksi oleh Supervisor (Checker).
+// Reject rejects transaction by a Supervisor (Checker).
 func (t *Transaction) Reject(checkerID string) error {
 	if t.Status != TxStatusPendingApproval {
 		return errors.New("transaction is not pending approval")

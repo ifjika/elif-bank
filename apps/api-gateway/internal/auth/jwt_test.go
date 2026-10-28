@@ -39,7 +39,7 @@ func TestTokenManager_GenerateAndVerify_Success(t *testing.T) {
 
 func TestTokenManager_ExpiredToken(t *testing.T) {
 	secret := "super-secure-banking-secret-key-32b"
-	// Token berumur negatif (-1 detik) sehingga langsung kedaluwarsa seketika
+	// Negative lifespan (-1 second) to trigger immediate token expiration
 	manager := NewTokenManager(secret, -1*time.Second)
 
 	tokenStr, err := manager.GenerateToken("user-1002", "customer_ani", RoleCustomer, "")
@@ -62,7 +62,7 @@ func TestTokenManager_TamperedToken(t *testing.T) {
 		t.Fatalf("failed to generate token: %v", err)
 	}
 
-	// Modifikasi satu karakter di akhir token untuk merusak tanda tangan kriptografis
+	// Modify one character at the end to invalidate the cryptographic signature
 	tamperedToken := tokenStr[:len(tokenStr)-4] + "xxxx"
 
 	_, err = manager.VerifyToken(tamperedToken)

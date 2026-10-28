@@ -12,15 +12,15 @@ import (
 
 // ==============================================================================
 // Unit Test: TransferUsecase (AAA Pattern)
-// Dokumen Terkait: docs/TESTING_GUIDE.md (Seksi 2) & docs/PRD.md (Seksi 3.2)
+// Related Documents: docs/TESTING_GUIDE.md (Section 2) & docs/PRD.md (Section 3.2)
 // ==============================================================================
 
-// --- Mock Implementations untuk Interface Domain (In-Memory) ---
+// --- Mock Implementations for Domain Interfaces (In-Memory) ---
 
 type mockTxManager struct{}
 
 func (m *mockTxManager) ExecuteInTransaction(ctx context.Context, fn func(txCtx context.Context) error) error {
-	return fn(ctx) // Jalankan langsung fungsi logika di memori
+	return fn(ctx) // Directly execute transaction logic in-memory
 }
 
 type mockAccountRepo struct {
@@ -78,7 +78,7 @@ func (m *mockLedgerRepo) CreateLedgerEntries(ctx context.Context, entries []doma
 }
 
 func (m *mockLedgerRepo) GetLatestEntryHash(ctx context.Context, accountID string) (string, error) {
-	// Cari mutasi terakhir untuk akun ini
+	// Find latest mutation entry for this account
 	for i := len(m.entries) - 1; i >= 0; i-- {
 		if m.entries[i].AccountID == accountID {
 			return m.entries[i].CurrentHash, nil
@@ -94,7 +94,7 @@ func (m *mockLedgerRepo) CreateOutboxEvent(ctx context.Context, eventType, aggre
 
 // --- Test Cases ---
 
-// Test 1: Skenario Sukses Transfer P2P (Balanced Double-Entry & SHA-256 Chain)
+// Test 1: Successful P2P Transfer (Balanced Double-Entry & SHA-256 Chain)
 func TestTransferUsecase_Success(t *testing.T) {
 	// 1. ARRANGE
 	accRepo := newMockAccountRepo()
@@ -105,7 +105,7 @@ func TestTransferUsecase_Success(t *testing.T) {
 	sourceAcc := &domain.Account{
 		ID:            "acc-001-source",
 		AccountNumber: "1001000001",
-		Balance:       1000000, // Rp 1.000.000
+		Balance:       1000000, // IDR 1,000,000
 		HoldBalance:   0,
 		Status:        domain.StatusActive,
 		CreatedAt:     time.Now().UTC(),
@@ -113,7 +113,7 @@ func TestTransferUsecase_Success(t *testing.T) {
 	destAcc := &domain.Account{
 		ID:            "acc-002-dest",
 		AccountNumber: "1001000002",
-		Balance:       500000, // Rp 500.000
+		Balance:       500000, // IDR 500,000
 		HoldBalance:   0,
 		Status:        domain.StatusActive,
 		CreatedAt:     time.Now().UTC(),
@@ -125,8 +125,8 @@ func TestTransferUsecase_Success(t *testing.T) {
 		ReferenceID:          "ref-tx-001",
 		SourceAccountID:      sourceAcc.ID,
 		DestinationAccountID: destAcc.ID,
-		Amount:               350000, // Transfer Rp 350.000
-		Description:          "Pembayaran Invoice #01",
+		Amount:               350000, // Transfer IDR 350,000
+		Description:          "Invoice Payment #01",
 		MakerID:              "customer_user_01",
 	}
 
@@ -141,15 +141,15 @@ func TestTransferUsecase_Success(t *testing.T) {
 		t.Fatal("expected result not to be nil")
 	}
 
-	// Cek Saldo Akhir
+	// Check Ending Balances
 	if sourceAcc.Balance != 650000 {
-		t.Errorf("expected source balance 650.000, got: %d", sourceAcc.Balance)
+		t.Errorf("expected source balance 650,000, got: %d", sourceAcc.Balance)
 	}
 	if destAcc.Balance != 850000 {
-		t.Errorf("expected dest balance 850.000, got: %d", destAcc.Balance)
+		t.Errorf("expected dest balance 850,000, got: %d", destAcc.Balance)
 	}
 
-	// Cek Invarian Double-Entry: Harus ada tepat 2 entri jurnal (1 Debit, 1 Kredit)
+	// Check Double-Entry Invariant: Exactly 2 journal entries (1 Debit, 1 Credit)
 	if len(ledgerRepo.entries) != 2 {
 		t.Fatalf("expected 2 ledger entries, got: %d", len(ledgerRepo.entries))
 	}
@@ -163,14 +163,14 @@ func TestTransferUsecase_Success(t *testing.T) {
 		t.Errorf("invalid credit entry: %+v", entryCredit)
 	}
 
-	// Verifikasi Validitas Kriptografis Rantai Hash SHA-256
+	// Verify Cryptographic Validity of SHA-256 Hash Chain
 	isValidHash := hashchain.VerifyHash(entryDebit.PreviousHash, entryDebit.AccountID, entryDebit.Amount, entryDebit.BalanceAfter, entryDebit.CreatedAt, entryDebit.CurrentHash)
 	if !isValidHash {
 		t.Error("SHA-256 audit hash verification failed for debit entry!")
 	}
 }
 
-// Test 2: Skenario Penolakan Saldo Tidak Mencukupi (Insufficient Funds)
+// Test 2: Rejection Scenario for Insufficient Balance
 func TestTransferUsecase_InsufficientFunds(t *testing.T) {
 	accRepo := newMockAccountRepo()
 	ledgerRepo := newMockLedgerRepo()
@@ -180,7 +180,7 @@ func TestTransferUsecase_InsufficientFunds(t *testing.T) {
 	sourceAcc := &domain.Account{
 		ID:            "acc-001",
 		AccountNumber: "1001",
-		Balance:       100000, // Hanya Rp 100.000
+		Balance:       100000, // IDR 100,000 only
 		Status:        domain.StatusActive,
 	}
 	destAcc := &domain.Account{
@@ -196,7 +196,7 @@ func TestTransferUsecase_InsufficientFunds(t *testing.T) {
 		ReferenceID:          "ref-tx-002",
 		SourceAccountID:      sourceAcc.ID,
 		DestinationAccountID: destAcc.ID,
-		Amount:               500000, // Mencoba transfer Rp 500.000
+		Amount:               500000, // Attempting to transfer IDR 500,000
 		MakerID:              "customer_01",
 	}
 
@@ -206,16 +206,16 @@ func TestTransferUsecase_InsufficientFunds(t *testing.T) {
 		t.Fatalf("expected ErrInsufficientFunds, got: %v", err)
 	}
 
-	// Pastikan saldo tetap utuh (tidak berubah)
+	// Ensure balances remain intact (unmodified)
 	if sourceAcc.Balance != 100000 {
-		t.Errorf("source balance should remain 100.000, got: %d", sourceAcc.Balance)
+		t.Errorf("source balance should remain 100,000, got: %d", sourceAcc.Balance)
 	}
 	if destAcc.Balance != 50000 {
-		t.Errorf("dest balance should remain 50.000, got: %d", destAcc.Balance)
+		t.Errorf("dest balance should remain 50,000, got: %d", destAcc.Balance)
 	}
 }
 
-// Test 3: Skenario Penolakan Rekening Berstatus FROZEN
+// Test 3: Rejection Scenario for FROZEN Account
 func TestTransferUsecase_FrozenAccount(t *testing.T) {
 	accRepo := newMockAccountRepo()
 	ledgerRepo := newMockLedgerRepo()
@@ -226,7 +226,7 @@ func TestTransferUsecase_FrozenAccount(t *testing.T) {
 		ID:            "acc-001",
 		AccountNumber: "1001",
 		Balance:       1000000,
-		Status:        domain.StatusFrozen, // Rekening Dibekukan!
+		Status:        domain.StatusFrozen, // Frozen Account
 	}
 	destAcc := &domain.Account{
 		ID:            "acc-002",
@@ -252,7 +252,7 @@ func TestTransferUsecase_FrozenAccount(t *testing.T) {
 	}
 }
 
-// Test 4: Verifikasi Algoritma Determinisme Pengurutan Leksikografis
+// Test 4: Verification of Deterministic Lexicographical Sorting Algorithm
 func TestTransferUsecase_SortIDs(t *testing.T) {
 	first, second := sortIDs("uuid-zebra", "uuid-apple")
 	if first != "uuid-apple" || second != "uuid-zebra" {

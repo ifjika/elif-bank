@@ -9,8 +9,8 @@ import (
 
 // ==============================================================================
 // Package money: Fixed-Point Arithmetic & Formatting
-// Dokumen Terkait: docs/TSD.md (Seksi 2.3)
-// Fungsi: Mencegah floating-point precision loss dan overflow pada int64
+// Related Documents: docs/TSD.md (Section 2.3)
+// Purpose: Prevent floating-point precision loss and int64 overflow
 // ==============================================================================
 
 var (
@@ -18,7 +18,7 @@ var (
 	ErrUnderflow = errors.New("arithmetic underflow detected")
 )
 
-// Add menjumlahkan dua nominal int64 dengan proteksi integer overflow.
+// Add sums two int64 values with integer overflow protection.
 func Add(a, b int64) (int64, error) {
 	if b > 0 && a > math.MaxInt64-b {
 		return 0, ErrOverflow
@@ -29,7 +29,7 @@ func Add(a, b int64) (int64, error) {
 	return a + b, nil
 }
 
-// Subtract mengurangkan nominal a dengan b dengan proteksi integer underflow.
+// Subtract subtracts b from a with integer underflow protection.
 func Subtract(a, b int64) (int64, error) {
 	if b < 0 && a > math.MaxInt64+b {
 		return 0, ErrOverflow
@@ -40,7 +40,7 @@ func Subtract(a, b int64) (int64, error) {
 	return a - b, nil
 }
 
-// FormatRupiah memformat integer Rupiah menjadi string yang mudah dibaca (misal: 50000000 -> "Rp 50.000.000").
+// FormatRupiah formats an integer Rupiah amount into a localized string (e.g., 50000000 -> "Rp 50.000.000").
 func FormatRupiah(amount int64) string {
 	isNegative := amount < 0
 	if isNegative {

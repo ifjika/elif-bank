@@ -1,141 +1,141 @@
 # Application Flow & State Machines: AethelCore Engine
 
-Dokumen ini memetakan diagram alur pengguna (*user flow*), *finite state machine* transaksi dan rekening, serta navigasi antarmuka untuk portal operasional perbankan.
+This document maps user flow diagrams, finite state machines (FSM) for transactions and accounts, and console navigational structures for banking operations.
 
 ---
 
-## 1. Diagram Alur Pengguna (User Flows)
+## 1. User Flows
 
-### 1.1 Alur Transfer Dana Antar-Rekening (P2P Transfer)
+### 1.1 Peer-to-Peer Funds Transfer Flow (P2P Transfer)
 
 ```text
-[ Nasabah / Klien ]
+[ Customer / Mobile Client ]
         │
-        │ 1. Kirim POST /api/v1/transfers (JWT + X-Idempotency-Key)
+        │ 1. Send POST /api/v1/transfers (JWT + X-Idempotency-Key)
         ▼
 [ API Gateway (Gin) ]
         │
-        ├─► [ Validasi Token JWT & Klaim Nasabah ]
-        ├─► [ Cek Redis: Apakah Idempotency-Key sudah pernah sukses? ]
-        │      └─► Jika YA: Kembalikan cached response (Selesai).
-        │      └─► Jika TIDAK: Set state "PROCESSING" di Redis.
+        ├─► [ Validate JWT Token & Customer Claims ]
+        ├─► [ Check Redis: Has Idempotency-Key already succeeded? ]
+        │      └─► If YES: Return cached response (Complete).
+        │      └─► If NO: Set "PROCESSING" state in Redis.
         │
         │ 2. Forward payload via gRPC: ExecuteTransfer()
         ▼
 [ Core Ledger Engine (Go) ]
         │
-        ├─► [ Buka Transaksi Database (BEGIN) ]
-        ├─► [ Urutkan UUID Akun Asal & Tujuan secara leksikografis ]
-        ├─► [ Eksekusi SELECT ... FOR UPDATE pada kedua akun ]
-        ├─► [ Validasi Status Rekening (Wajib 'ACTIVE') ]
-        ├─► [ Validasi Saldo: AvailableBalance >= Amount? ]
-        │      └─► Jika Saldo Kurang: ROLLBACK, kembalikan 422 Insufficient Funds.
+        ├─► [ Begin Database Transaction (BEGIN) ]
+        ├─► [ Sort Source & Destination Account UUIDs lexicographically ]
+        ├─► [ Execute SELECT ... FOR UPDATE on both accounts ]
+        ├─► [ Validate Account Status (Must be 'ACTIVE') ]
+        ├─► [ Validate Balance: AvailableBalance >= Amount? ]
+        │      └─► If Insufficient: ROLLBACK, return 422 Insufficient Funds.
         │
-        ├─► [ Mutasi Saldo: Kurangi Akun Asal, Tambah Akun Tujuan ]
-        ├─► [ Insert Tabel transactions (Header) ]
-        ├─► [ Insert Tabel ledger_entries (Debit & Kredit berpasangan + SHA256 Chain) ]
-        ├─► [ Insert Tabel outbox_events (Event Kafka) ]
+        ├─► [ Mutate Balances: Debit Source, Credit Destination ]
+        ├─► [ Insert transactions table row (Header) ]
+        ├─► [ Insert ledger_entries table rows (Balanced Debit & Credit + SHA-256 Chain) ]
+        ├─► [ Insert outbox_events table row (Kafka Event) ]
         │
-        ├─► [ COMMIT Transaksi Database ]
+        ├─► [ COMMIT Database Transaction ]
         ▼
-[ Respon Sukses ]
+[ Success Response ]
         │
-        ├─► Simpan hasil sukses di Redis cache
-        └─► Kembalikan HTTP 200 OK + Transaction Reference ID ke Nasabah
+        ├─► Cache success response in Redis
+        └─► Return HTTP 200 OK + Transaction Reference ID to Customer
 ```
 
 ---
 
-### 1.2 Alur Transaksi Kas Cabang & Maker-Checker (> Rp 50 Juta)
+### 1.2 Branch Cash Transactions & Maker-Checker Flow (> IDR 50,000,000)
 
 ```text
 [ Teller (Maker) ]
         │
-        │ 1. Input Transaksi Penarikan Kas Rp 75.000.000
+        │ 1. Submit Cash Withdrawal of IDR 75,000,000
         ▼
 [ Core Ledger ]
         │
-        ├─► Deteksi Nominal: Rp 75.000.000 > Rp 50.000.000 (Threshold limit)
-        ├─► Kunci Saldo Efektif sebagai 'hold_balance' (agar tidak ditarik ganda)
-        ├─► Simpan transaksi dengan status: 'PENDING_APPROVAL'
+        ├─► Detect Amount: IDR 75,000,000 > IDR 50,000,000 (Approval threshold)
+        ├─► Lock Effective Balance into 'hold_balance' (prevents double-spending)
+        ├─► Save transaction with status: 'PENDING_APPROVAL'
         ▼
-[ Portal Supervisor (Checker) ]
+[ Branch Supervisor Portal (Checker) ]
         │
-        │ 2. Muncul notifikasi "Approval Required: Cash Withdrawal > 50 Jt"
-        │    Supervisor meninjau dokumen fisik & KTP nasabah
+        │ 2. Receives notification: "Approval Required: Cash Withdrawal > 50M"
+        │    Supervisor reviews physical ID & customer passbook
         │
-        ├─► Opsi A: Supervisor Klik REJECT
-        │      └─► Lepaskan hold_balance, ubah status transaksi menjadi 'REJECTED'
+        ├─► Option A: Supervisor clicks REJECT
+        │      └─► Release hold_balance, update transaction status to 'REJECTED'
         │
-        └─► Opsi B: Supervisor Klik APPROVE (Kirim JWT Supervisor)
-               ├─► Verifikasi: Checker ID != Maker ID
-               ├─► Eksekusi debit permanen pada rekening
-               ├─► Catat jurnal double-entry ke kas fisik cabang
-               └─► Ubah status transaksi menjadi 'POSTED'
+        └─► Option B: Supervisor clicks APPROVE (Transmits Supervisor JWT)
+               ├─► Verify: Checker ID != Maker ID
+               ├─► Execute permanent balance debit on account
+               ├─► Record double-entry journal to branch vault cash
+               └─► Update transaction status to 'POSTED'
 ```
 
 ---
 
 ## 2. Finite State Machines (FSM)
 
-### 2.1 State Machine Rekening Simpanan (Account FSM)
+### 2.1 Savings Account State Machine (Account FSM)
 
 ```text
     ┌────────────────┐
-    │  DORMANT       │ (Tidak ada transaksi > 180 hari)
+    │  DORMANT       │ (No activity for > 180 days)
     │                │
     └───────▲────────┘
-            │ Tidak aktif > 180 hari
+            │ Inactive > 180 days
             │
-            ▼ Verifikasi ulang KTP
-    ┌────────────────┐       Blokir Anomali / Hukum       ┌────────────────┐
-    │  ACTIVE        ├───────────────────────────────────►│  FROZEN        │
-    │  (Siap Pakai)  │◄───────────────────────────────────┤ (Debit Diblokir│
-    └───────┬────────┘       Buka Blokir Supervisor       └────────────────┘
+            ▼ KYC Reverification
+    ┌────────────────┐       Anomaly / Regulatory Freeze   ┌────────────────┐
+    │  ACTIVE        ├────────────────────────────────────►│  FROZEN        │
+    │  (Operational) │◄────────────────────────────────────┤ (Debits Blocked│
+    └───────┬────────┘       Supervisor Unfreeze           └────────────────┘
             │
-            │ Saldo = Rp 0 & Nasabah menutup rekening
+            │ Balance = IDR 0 & Customer closes account
             ▼
     ┌────────────────┐
-    │  CLOSED        │ (Status Final: Tidak dapat menerima mutasi apapun)
+    │  CLOSED        │ (Terminal State: Rejects all mutations permanently)
     └────────────────┘
 ```
 
-### 2.2 State Machine Transaksi Finansial (Transaction FSM)
+### 2.2 Financial Transaction State Machine (Transaction FSM)
 
 ```text
-                [ Request Masuk ]
-                        │
-                        ▼
-                 ┌──────────────┐
-                 │  INITIATED   │
-                 └──────┬───────┘
-                        │
-         Nominal <= 50 Jt? (atau Transfer P2P)
-                        ├──────────────────────────┐
-                        │ Ya                       │ Tidak (> 50 Jt Cabang)
-                        ▼                          ▼
-                 ┌──────────────┐           ┌──────────────────┐
-                 │  POSTED      │           │ PENDING_APPROVAL │
-                 │ (Buku Besar  │           └─────────┬────────┘
-                 │  Tercatat)   │                     │
-                 └──────────────┘           Supervisor│Decision
-                                            ┌─────────┴─────────┐
-                                            ▼                   ▼
-                                     ┌──────────────┐    ┌──────────────┐
-                                     │    POSTED    │    │   REJECTED   │
-                                     └──────────────┘    └──────────────┘
+                 [ Inbound Request ]
+                         │
+                         ▼
+                  ┌──────────────┐
+                  │  INITIATED   │
+                  └──────┬───────┘
+                         │
+          Amount <= 50M? (or P2P Transfer)
+                         ├──────────────────────────┐
+                         │ Yes                      │ No (> 50M Branch Cash)
+                         ▼                          ▼
+                  ┌──────────────┐           ┌──────────────────┐
+                  │  POSTED      │           │ PENDING_APPROVAL │
+                  │ (Committed   │           └─────────┬────────┘
+                  │  to Ledger)  │                     │
+                  └──────────────┘           Supervisor│Decision
+                                             ┌─────────┴─────────┐
+                                             ▼                   ▼
+                                      ┌──────────────┐    ┌──────────────┐
+                                      │    POSTED    │    │   REJECTED   │
+                                      └──────────────┘    └──────────────┘
 ```
 
 ---
 
-## 3. Pemetaan Navigasi Konsol Web (Screen Navigation Map)
+## 3. Web Console Navigation Map
 
 ```text
 [ Login Screen ]
    │
-   ├─► Role = CUSTOMER ────► [ Customer Portal: Cek Saldo & Histori Transfer ]
+   ├─► Role = CUSTOMER ────► [ Customer Portal: Balance Check & Transfer History ]
    │
-   ├─► Role = TELLER ──────► [ Teller Console: Setor Tunai / Tarik Tunai Kas ]
+   ├─► Role = TELLER ──────► [ Teller Console: Branch Cash Deposit & Withdrawal ]
    │
    └─► Role = SUPERVISOR ──► [ Supervisor Portal: Approval Queue & Ledger Audit ]
 ```

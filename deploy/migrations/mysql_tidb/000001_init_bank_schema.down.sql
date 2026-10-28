@@ -1,6 +1,6 @@
 -- ==============================================================================
 -- Migration Rollback: 000001_init_bank_schema.down.sql (MySQL & TiDB)
--- Dokumen Terkait: docs/TSD.md
+-- Related Documents: docs/TSD.md
 -- ==============================================================================
 
 SET FOREIGN_KEY_CHECKS = 0;

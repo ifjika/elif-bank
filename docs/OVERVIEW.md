@@ -1,17 +1,19 @@
 # Architectural Overview & System Specification: AethelCore Engine
 
-AethelCore adalah ekosistem miniatur Core Banking System (CBS) terdistribusi berbasis Golang yang mengimplementasikan standar akuntansi buku besar berpasangan (*double-entry ledger*), transaksi atomik berstandar ACID dengan jaminan determinisme konkurensi, kontrol operasional cabang (*Four-Eyes Principle / Maker-Checker*), jejak audit kriptografis *tamper-evident*, serta generator data transaksional otonom berbasis *cron-job*.
+AethelCore is a distributed miniature Core Banking System (CBS) ecosystem built in Golang. It implements double-entry general ledger accounting standards, ACID transactions with concurrency determinism guarantees, branch operational governance (*Four-Eyes Principle / Maker-Checker*), tamper-evident cryptographic audit trails, and an autonomous cron-driven transactional workload generator.
 
-Seluruh arsitektur dikelola dalam satu Polyglot Monorepo menggunakan fitur native Go Workspaces (`go.work`) untuk mengintegrasikan mesin pemrosesan backend performa tinggi, gerbang API (*Backend-for-Frontend*), konsol operasional cabang, dan telemetri sistem.
+The entire architecture is organized as a Polyglot Monorepo utilizing native Go Workspaces (`go.work`) to coordinate high-performance backend transaction processing, an API Gateway (*Backend-for-Frontend*), branch operational consoles, and telemetry systems.
+
+The database layer is unified on **MySQL 8.0 protocol compatibility** and native support for **TiDB Cloud Serverless (PingCAP)**.
 
 ---
 
-## 1. Domain & Alur Bisnis Perbankan
+## 1. Domain & Banking Business Flows
 
-Sistem ini memodelkan pilar fundamental perbankan komersial modern dengan isolasi tanggung jawab yang ketat:
+The system models the fundamental pillars of modern commercial banking with strict separation of concerns:
 
 ```text
-[ Nasabah / Mobile ]        [ Teller / Cabang ]
+[ Customer / Mobile ]       [ Teller / Branch ]
         │                            │
         ▼                            ▼
 ┌────────────────────────────────────────────────────────┐
@@ -29,7 +31,7 @@ Sistem ini memodelkan pilar fundamental perbankan komersial modern dengan isolas
 │  - Cryptographic SHA-256 Hash-Chained Audit Trail      │
 └──────────────┬───────────────────────────┬─────────────┘
                │                           │
-    Transactional Outbox (Kafka)           │ Database Write (PostgreSQL)
+    Transactional Outbox (Kafka)           │ Database Write (MySQL 8.0 / TiDB)
                ▼                           ▼
 ┌──────────────────────────────┐ ┌───────────────────────┐
 │     EOD & Batch Worker       │ │   General Ledger &    │
@@ -41,60 +43,60 @@ Sistem ini memodelkan pilar fundamental perbankan komersial modern dengan isolas
 
 ### 1.1 Funding & Account Subsystem
 
-- Mendukung pembukaan dan manajemen rekening simpanan nasabah: Tabungan Individu, Giro Komersial, dan Deposito Berjangka.
-- **State Machine Rekening**: `ACTIVE`, `FROZEN`, `DORMANT`, dan `CLOSED`. Rekening berstatus non-aktif secara deterministik menolak mutasi debit maupun kredit baru.
-- Pemisahan mutlak antara saldo efektif (*available balance*) dan saldo tertahan (*hold balance / escrow*) untuk memfasilitasi transaksi pre-otorisasi atau jaminan pinjaman.
+- Manages customer deposit accounts: Individual Savings, Commercial Checking, and Time Deposits.
+- **Account State Machine**: `ACTIVE`, `FROZEN`, `DORMANT`, and `CLOSED`. Inactive accounts deterministically reject all new debit or credit mutations.
+- Strict separation between available balance (*available balance*) and reserved balance (*hold balance / escrow*) for loan collateral or authorization queues.
 
 ### 1.2 Double-Entry Transaction Engine
 
-- Prinsip fundamental akuntansi diterapkan secara absolut: tidak ada mutasi saldo tunggal (`UPDATE balance = balance - x`).
-- Setiap pemindahan dana wajib menghasilkan minimal sepasang entri jurnal (*balanced entries*): satu akun didebit dan satu akun lainnya dikredit dengan nilai nominal yang persis sama.
-- Penegakan konsistensi invarian akuntansi:
+- Absolute enforcement of core accounting principles: single-sided balance updates (`UPDATE balance = balance - x`) are prohibited.
+- Every fund movement produces at least one pair of balanced journal entries: one account debited and another credited with the exact same amount.
+- Accounting invariant enforcement:
 
-$$\sum \text{Debit} - \sum \text{Kredit} = 0$$
+$$\sum \text{Debit} - \sum \text{Credit} = 0$$
 
 ### 1.3 Branch Operations & Governance (Maker-Checker)
 
-- Transaksi kas fisik teller cabang dengan nilai $\le \text{Rp50.000.000}$ diproses seketika (*straight-through processing*).
-- Transaksi kas bernilai $> \text{Rp50.000.000}$ secara otomatis dialihkan ke status `PENDING_APPROVAL`, menuntut otorisasi digital terpisah dari Supervisor Cabang (*Checker*) sebelum mutasi buku besar dieksekusi (*Four-Eyes Principle*).
+- Over-the-counter physical cash transactions $\le \text{IDR 50,000,000}$ are processed straight-through.
+- Cash transactions $> \text{IDR 50,000,000}$ automatically transition to `PENDING_APPROVAL`, requiring digital authorization from a branch Supervisor (*Checker*) before ledger mutation occurs (*Four-Eyes Principle*).
 
 ### 1.4 Lending & Amortization Subsystem
 
-Simulasi pencairan pinjaman (*disbursement*), penyusunan jadwal pembayaran berbasis formula bunga anuitas, dan mekanisme penagihan cicilan berkala (*auto-debit*).
+Simulates loan disbursement, annuity repayment schedule calculation, and automated periodic installment debits.
 
-Pengelompokan status kolektibilitas kredit otomatis berdasarkan hari keterlambatan (*Days Past Due* / DPD):
-- **KOL 1 (Lancar)**: Tunggakan 0 hari.
-- **KOL 2 (Dalam Perhatian Khusus)**: Tunggakan 1–90 hari.
-- **KOL 3 (Kurang Lancar)**: Tunggakan 91–120 hari.
-- **KOL 4 (Diragukan)**: Tunggakan 121–180 hari.
-- **KOL 5 (Macet)**: Tunggakan $> 180$ hari.
+Automatic credit collectibility classification based on Days Past Due (DPD):
+- **KOL 1 (Current / Performing)**: 0 days overdue.
+- **KOL 2 (Special Mention)**: 1–90 days overdue.
+- **KOL 3 (Substandard)**: 91–120 days overdue.
+- **KOL 4 (Doubtful)**: 121–180 days overdue.
+- **KOL 5 (Loss / Default)**: $> 180$ days overdue.
 
 ### 1.5 End-of-Day (EOD) Batch Engine
 
-Modul otonom yang mengeksekusi penutupan buku harian perbankan (*day-end rollover*):
-- Akrual bunga simpanan harian:
+Autonomous module executing bank day-end rollover procedures:
+- Daily savings interest accrual:
 
-$$\text{Bunga Harian} = \frac{\text{Saldo Akhir} \times \text{Suku Bunga}}{365}$$
+$$\text{Daily Interest} = \frac{\text{Closing Balance} \times \text{Interest Rate}}{365}$$
 
-- Pemotongan otomatis Pajak Penghasilan (PPh Final 20%) atas pendapatan bunga.
-- Pemotongan biaya administrasi bulanan dan denda keterlambatan pinjaman.
-- Konsolidasi neraca saldo penutupan (*trial balance*) untuk menjamin keseimbangan seluruh *Chart of Accounts* (COA).
+- Automated withholding tax (20% PPh Final) on interest income.
+- Deduction of monthly maintenance fees and late payment penalties.
+- Trial balance consolidation to ensure zero imbalance across all *Chart of Accounts* (COA).
 
 ### 1.6 Autonomous Traffic Generator
 
-Pekerja otonom berbasis loop dinamis dan penjadwalan periodik yang memproduksi ribuan transaksi sintetis (transfer antar-rekening, setor/tarik kas, pembayaran merchant) secara berkelanjutan guna menguji konkurensi ekstrem, deteksi *race condition*, dan stabilitas latensi p99 database.
+Background worker driving dynamic request loops and periodic schedules to generate thousands of synthetic transactions (transfers, deposits, withdrawals, merchant settlements) to benchmark extreme concurrency, race conditions, and database p99 latencies.
 
 ---
 
-## 2. Struktur Direktori Monorepo (go.work)
+## 2. Monorepo Directory Structure (go.work)
 
 ```text
-aethelcore/
+elif-bank/
 ├── .github/
 │   └── workflows/
 │       ├── test-core.yml        # CI linting & race-detector
 │       └── build-images.yml     # Multi-stage Docker build
-├── proto/                       # Sumber kebenaran kontrak antarmuka
+├── proto/                       # Single source of truth for interface contracts
 │   ├── account/v1/account.proto
 │   ├── ledger/v1/ledger.proto
 │   ├── branch/v1/branch.proto
@@ -104,161 +106,173 @@ aethelcore/
 │   │   ├── cmd/server/main.go
 │   │   ├── internal/
 │   │   └── go.mod
-│   ├── core-ledger/             # Go: Mesin transaksi double-entry utama
+│   ├── core-ledger/             # Go: Core double-entry transaction engine
 │   │   ├── cmd/server/main.go
 │   │   ├── internal/
 │   │   │   ├── domain/          # Entities & repository interfaces
-│   │   │   ├── usecase/         # Logika transfer, locking, audit chain
-│   │   │   └── repository/      # Implementasi PostgreSQL (pgx)
+│   │   │   ├── usecase/         # Transfer logic, locking, audit chain
+│   │   │   └── repository/      # MySQL 8.0 / TiDB implementation
 │   │   └── go.mod
-│   ├── worker-eod/              # Go: Batch engine penutupan hari (EOD)
+│   ├── worker-eod/              # Go: Day-end rollover batch engine (EOD)
 │   │   ├── cmd/worker/main.go
 │   │   └── go.mod
-│   ├── simulator-cron/          # Go: Generator dummy transaksional otonom
+│   ├── simulator-cron/          # Go: Autonomous synthetic traffic generator
 │   │   ├── cmd/simulator/main.go
 │   │   └── go.mod
-│   └── web-console/             # Next.js 15: Portal Teller, Supervisor, & Nasabah
+│   └── web-console/             # Next.js 15: Teller, Supervisor & Customer portal
 │       ├── src/
 │       │   ├── app/
-│       │   │   ├── branch/      # Portal Cabang (Layar Teller & Supervisor)
+│       │   │   ├── branch/      # Branch portal (Teller & Supervisor screens)
 │       │   │   └── customer/    # Mock Mobile Banking Viewport
 │       │   └── components/
 │       └── package.json
-├── pkg/                         # Modul bersama (Shared Go Packages)
-│   ├── hashchain/               # Engine SHA-256 linked-list untuk audit record
-│   ├── idempotency/             # Deduplikasi payload request berbasis hash
-│   ├── money/                   # Penanganan integer presisi tetap (bebas float)
+├── pkg/                         # Shared Go Packages
+│   ├── hashchain/               # SHA-256 linked-list engine for audit records
+│   ├── idempotency/             # Hash-based request payload deduplication
+│   ├── money/                   # Fixed-point precision integer math (no floats)
 │   └── go.mod
-├── deploy/                      # Lingkungan orkestrasi lokal
-│   ├── docker-compose.yml       # PostgreSQL, Redis, Kafka, Prometheus, Grafana
+├── deploy/                      # Local orchestration environment
+│   ├── docker-compose.yml       # MySQL 8.0 / TiDB-compatible, Redis 7
+│   ├── migrations/mysql_tidb/   # Unified schema migrations
 │   ├── prometheus.yml
 │   └── grafana/
-│       └── dashboards/          # Visualisasi TPS, latency p99, ledger invariant
-├── go.work                      # Orkestrasi workspace multi-modul Go
-└── OVERVIEW.md
+│       └── dashboards/          # Visualization for TPS, p99 latency, ledger invariants
+├── docs/                        # Architecture documentation & system guides
+├── go.work                      # Multi-module Go workspace orchestration
+└── README.md
 ```
 
 ---
 
-## 3. Skema Data & Database Design (PostgreSQL)
+## 3. Data Schema & Database Design (MySQL 8.0 / TiDB)
 
-Seluruh nilai finansial disimpan dalam satuan integer terkecil (sen atau rupiah penuh) menggunakan tipe `BIGINT` untuk mencegah kesalahan pembulatan IEEE 754.
+All monetary amounts are stored in the smallest integer denomination (cents or whole rupiah) using `BIGINT` to prevent IEEE 754 floating-point rounding errors.
 
 ```sql
--- 1. Rekening Nasabah & Akun Internal Buku Besar
+-- 1. Customer Accounts & General Ledger Internal Accounts
 CREATE TABLE accounts (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    account_number VARCHAR(32) UNIQUE NOT NULL,
-    customer_id UUID NULL,
-    account_type VARCHAR(16) NOT NULL, -- ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE
+    id VARCHAR(36) PRIMARY KEY,
+    account_number VARCHAR(32) NOT NULL UNIQUE,
+    customer_id VARCHAR(36) NULL,
+    account_type ENUM('ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE') NOT NULL,
     currency VARCHAR(3) NOT NULL DEFAULT 'IDR',
     balance BIGINT NOT NULL DEFAULT 0,
     hold_balance BIGINT NOT NULL DEFAULT 0,
-    status VARCHAR(16) NOT NULL DEFAULT 'ACTIVE',
+    status ENUM('ACTIVE', 'FROZEN', 'DORMANT', 'CLOSED') NOT NULL DEFAULT 'ACTIVE',
     version BIGINT NOT NULL DEFAULT 0,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    INDEX idx_accounts_status (status),
+    INDEX idx_accounts_customer (customer_id),
+    CONSTRAINT chk_positive_hold CHECK (hold_balance >= 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 2. Transaksi Finansial (Header)
+-- 2. Financial Transactions (Header)
 CREATE TABLE transactions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    reference_id VARCHAR(64) UNIQUE NOT NULL, -- Idempotency key
+    id VARCHAR(36) PRIMARY KEY,
+    reference_id VARCHAR(64) NOT NULL UNIQUE, -- Idempotency key
     transaction_type VARCHAR(32) NOT NULL,    -- TRANSFER, CASH_DEPOSIT, CASH_WITHDRAWAL, FEE, INTEREST
     amount BIGINT NOT NULL,
     description TEXT NOT NULL,
     maker_id VARCHAR(64) NOT NULL,
-    checker_id VARCHAR(64) NULL,              -- Otorisasi Supervisor jika required
-    status VARCHAR(16) NOT NULL DEFAULT 'POSTED',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+    checker_id VARCHAR(64) NULL,              -- Supervisor authorization if required
+    status ENUM('POSTED', 'PENDING_APPROVAL', 'REJECTED') NOT NULL DEFAULT 'POSTED',
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    INDEX idx_tx_created (created_at DESC),
+    INDEX idx_tx_status (status),
+    INDEX idx_tx_reference (reference_id),
+    CONSTRAINT chk_tx_amount CHECK (amount > 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 3. Jurnal Buku Besar (Double-Entry Mutation)
+-- 3. General Ledger Journal Entries (Double-Entry Mutation)
 CREATE TABLE ledger_entries (
-    id BIGSERIAL PRIMARY KEY,
-    transaction_id UUID NOT NULL REFERENCES transactions(id),
-    account_id UUID NOT NULL REFERENCES accounts(id),
-    entry_type VARCHAR(2) NOT NULL,           -- 'DR' (Debit) atau 'CR' (Kredit)
-    amount BIGINT NOT NULL CHECK (amount > 0),
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    transaction_id VARCHAR(36) NOT NULL,
+    account_id VARCHAR(36) NOT NULL,
+    entry_type ENUM('DR', 'CR') NOT NULL,     -- 'DR' (Debit) or 'CR' (Credit)
+    amount BIGINT NOT NULL,
     balance_after BIGINT NOT NULL,
-    previous_hash VARCHAR(64) NOT NULL,       -- SHA-256 chain dari baris akun sebelumnya
-    current_hash VARCHAR(64) NOT NULL,        -- SHA-256(prev_hash + account_id + amount + balance_after)
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX idx_entries_account_created ON ledger_entries(account_id, created_at DESC);
+    previous_hash VARCHAR(64) NOT NULL,       -- SHA-256 chain from previous account entry
+    current_hash VARCHAR(64) NOT NULL,        -- SHA-256(prev_hash + account_id + amount + balance_after + timestamp)
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    INDEX idx_entries_account_created (account_id, created_at DESC),
+    INDEX idx_entries_tx (transaction_id),
+    CONSTRAINT fk_entries_tx FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_entries_acc FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_entry_amount CHECK (amount > 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
 ---
 
-## 4. Analisis Vulnerability & Mitigasi Keamanan Siber
+## 4. Vulnerability Analysis & Cyber Security Mitigations
 
-### 4.1 Race Condition & Deadlock Konkurensi
+### 4.1 Race Conditions & Concurrency Deadlocks
 
-- **Vektor Serangan**: Dua transaksi transfer silang antara akun A dan akun B dieksekusi secara paralel. Penguncian baris database tanpa urutan deterministik akan memicu *cyclic deadlock*.
-- **Mitigasi**: Mengurutkan identifier akun secara leksikografis sebelum query `FOR UPDATE` dieksekusi:
+- **Attack Vector**: Two cross-transfer transactions between Account A and Account B executed in parallel. Locking rows without deterministic order triggers cyclic deadlocks.
+- **Mitigation**: Sort account identifiers lexicographically prior to executing `SELECT ... FOR UPDATE`:
 
 ```go
 firstID, secondID := fromID, toID
 if firstID > secondID {
     firstID, secondID = toID, fromID
 }
-tx.Exec(ctx, "SELECT id, balance FROM accounts WHERE id IN ($1, $2) ORDER BY id FOR UPDATE", firstID, secondID)
+tx.Exec(ctx, "SELECT id, balance FROM accounts WHERE id IN (?, ?) ORDER BY id FOR UPDATE", firstID, secondID)
 ```
 
-### 4.2 Network Partition & Replay Attack
+### 4.2 Network Partitions & Replay Attacks
 
-- **Vektor Serangan**: Kegagalan jaringan di tengah proses menyebabkan kanal pengguna mengirim ulang request transfer (*retry storm*), berisiko mendebit saldo ganda.
-- **Mitigasi**: Penerapan kunci idempotensi wajib (`X-Idempotency-Key`). Lapisan Gateway memvalidasi state kunci pada Redis dengan status atomik `ACQUIRING` sebelum membuka transaksi database. Request duplikat akan menerima respons ter-*cache* tanpa eksekusi ulang.
+- **Attack Vector**: Network failure midway through request handling causes the client to retry transfer requests, risking double-debiting balances.
+- **Mitigation**: Mandatory idempotency keys (`X-Idempotency-Key`). Gateway performs atomic key acquisition in Redis with `ACQUIRING` status before opening a database transaction. Duplicate requests receive cached responses without re-execution.
 
-### 4.3 Bypass Otorisasi Maker-Checker
+### 4.3 Maker-Checker Authorization Bypass
 
-- **Vektor Serangan**: Manipulasi parameter *client-side* untuk memalsukan status persetujuan transaksi di atas limit kas teller.
-- **Mitigasi**: Penegakan verifikasi kriptografis berbasis *dual JWT claims*. Token Maker dan Checker divalidasi terhadap *public key* yang berbeda. Backend secara eksplisit menolak mutasi jika identitas `maker_id` identik dengan `checker_id`.
+- **Attack Vector**: Manipulating client-side parameters to fake approval status on cash transactions exceeding teller limits.
+- **Mitigation**: Dual JWT claims cryptographic verification. Maker and Checker tokens are validated against separate public keys or roles. The backend explicitly rejects mutations if `maker_id` is identical to `checker_id`.
 
 ### 4.4 Silent Ledger Tampering (Insider Threat)
 
-- **Vektor Serangan**: Manipulasi langsung baris database oleh akun administratif internal.
-- **Mitigasi**: Setiap entri buku besar dihubungkan menggunakan rantai hash SHA-256:
+- **Attack Vector**: Direct row alteration in the database by internal privileged administrative accounts.
+- **Mitigation**: Every ledger entry is linked via a SHA-256 hash chain:
 
 $$\text{Hash}_n = \text{SHA256}(\text{Hash}_{n-1} \parallel \text{AccountID} \parallel \text{Amount} \parallel \text{BalanceAfter})$$
 
-Batch audit EOD memverifikasi keutuhan rantai hash secara berulang; modifikasi ilegal pada satu entri akan memutus rantai dan memicu alarm anomali.
+EOD audit batches recursively verify chain continuity; illicit row modification breaks the chain and triggers immediate security alerts.
 
 ---
 
-## 5. Spesifikasi Generator Data Otomatis (Cron Simulator)
+## 5. Automated Data Generator Specifications (Cron Simulator)
 
-Modul `apps/simulator-cron` bertindak sebagai generator lalu lintas transaksi otonom:
+The `apps/simulator-cron` module acts as an autonomous transactional traffic generator:
 
 ### 5.1 Cold-Start Provisioning
 
-- Menghasilkan 5 entitas kantor cabang fiktif.
-- Menghasilkan 10 akun Teller dan 5 akun Supervisor dengan kredensial terisolasi.
-- Menghasilkan 1.000 akun rekening nasabah lengkap dengan saldo awal acak realistis.
+- Provisions 5 fictitious bank branch entities.
+- Provisions 10 Teller accounts and 5 Supervisor accounts with isolated credentials.
+- Provisions 1,000 customer accounts populated with realistic initial balances.
 
 ### 5.2 High-Frequency Transaction Loop
 
-- **Interval eksekusi**: $10\text{--}50\text{ ms}$ (Target: 50–200 TPS stabil).
-- **Komposisi beban kerja**:
-  - **70%**: Transfer peer-to-peer antar-rekening nasabah.
-  - **15%**: Transaksi pembayaran pihak ketiga / merchant.
-  - **10%**: Setor dan tarik tunai teller cabang.
-  - **5%**: Transaksi gagal terencana (saldo tidak cukup, rekening beku) untuk menguji konsistensi rollback database.
+- **Execution Interval**: $10\text{--}50\text{ ms}$ (Target: 50–200 sustained TPS).
+- **Workload Composition**:
+  - **70%**: Peer-to-peer customer fund transfers.
+  - **15%**: Third-party merchant / bill payments.
+  - **10%**: Branch teller cash deposits and withdrawals.
+  - **5%**: Controlled failure transactions (insufficient funds, frozen accounts) to test database rollback consistency.
 
 ### 5.3 Scheduled EOD Engine Loop
 
-- **Frekuensi eksekusi**: Berjalan setiap interval 5 menit (mengemulasikan siklus penutupan buku 1 hari kalender perbankan).
-- **Aktivitas batch**: Menjalankan kalkulasi akrual bunga harian simpanan, kapitalisasi bunga periodik, dan evaluasi keterlambatan cicilan pinjaman secara batch.
+- **Execution Frequency**: Runs every 5-minute interval (emulating a 1-day banking calendar rollover cycle).
+- **Batch Tasks**: Runs savings interest accruals, periodic interest capitalizations, and loan delinquency assessments in batch.
 
 ---
 
-## 6. Metrik Kinerja & Standar Kuantitatif Target
+## 6. Performance Metrics & Quantitative Target Standards
 
-| Metrik Evaluasi | Target Standar Produksi | Metrik Validasi |
+| Evaluation Metric | Production Target Standard | Validation Method |
 | :--- | :--- | :--- |
-| **Throughput Mutasi ACID** | $\ge 2.500 \text{ TPS}$ | Uji beban gRPC menggunakan tool `ghz` |
-| **Latensi Transaksi (p99)** | $\le 20 \text{ ms}$ | Terukur pada panel metrik Prometheus |
-| **Integritas Akuntansi** | $0 \text{ Anomali}$ | $\sum \text{Debit} - \sum \text{Kredit} = 0$ secara absolut |
-| **Ketahanan Konkurensi** | $0{,}00\% \text{ Race Condition}$ | 500 goroutine paralel mendebit 1 rekening |
-| **Footprint Memori Backend** | $\le 40 \text{ MB per pod}$ | Profiling alokasi heap melalui runtime `pprof` |
+| **ACID Mutation Throughput** | $\ge 2,500 \text{ TPS}$ | gRPC load testing using `ghz` |
+| **Transaction Latency (p99)** | $\le 20 \text{ ms}$ | Measured via Prometheus metric panels |
+| **Accounting Invariant Integrity** | $0 \text{ Anomalies}$ | Absolute $\sum \text{Debit} - \sum \text{Credit} = 0$ |
+| **Concurrency Resilience** | $0.00\% \text{ Race Conditions}$ | 500 parallel goroutines debiting 1 account |
+| **Backend Memory Footprint** | $\le 40 \text{ MB per pod}$ | Heap allocation profiling via `pprof` |

@@ -12,9 +12,9 @@ import (
 
 // ==============================================================================
 // Delivery HTTP: Handlers & Router Setup (Gin)
-// Dokumen Terkait: docs/INTEGRATION.md (Seksi 1 & 2) & docs/ARCHITECTURE.md
-// Catatan Arsitektur: API Gateway tidak mengimpor internal core-ledger secara langsung
-//                     melainkan menggunakan DTO & Service Interface mandiri (Loose Coupling).
+// Related Documents: docs/INTEGRATION.md (Section 1 & 2) & docs/ARCHITECTURE.md
+// Architectural Note: API Gateway does not import core-ledger internals directly;
+//                      it relies on standalone DTOs & Service Interfaces (Loose Coupling).
 // ==============================================================================
 
 var (
@@ -25,7 +25,7 @@ var (
 	ErrAccountNotFound     = errors.New("account not found")
 )
 
-// TransferCommand DTO untuk pengiriman transaksi ke service layer / gRPC.
+// TransferCommand DTO for dispatching transactions to service layer / gRPC.
 type TransferCommand struct {
 	ReferenceID          string
 	SourceAccountID      string
@@ -35,7 +35,7 @@ type TransferCommand struct {
 	MakerID              string
 }
 
-// TransferResult DTO balasan dari eksekusi transfer.
+// TransferResult DTO response from transfer execution.
 type TransferResult struct {
 	TransactionID string    `json:"transaction_id"`
 	ReferenceID   string    `json:"reference_id"`
@@ -46,7 +46,7 @@ type TransferResult struct {
 	CreatedAt     time.Time `json:"created_at"`
 }
 
-// AccountInfo DTO informasi rekening.
+// AccountInfo DTO for account details.
 type AccountInfo struct {
 	ID               string `json:"id"`
 	AccountNumber    string `json:"account_number"`
@@ -57,17 +57,17 @@ type AccountInfo struct {
 	Status           string `json:"status"`
 }
 
-// TransferService mendefinisikan kontrak operasi transfer ke Core Ledger.
+// TransferService defines the contract for transfer operations to the Core Ledger.
 type TransferService interface {
 	Execute(ctx context.Context, cmd TransferCommand) (*TransferResult, error)
 }
 
-// AccountService mendefinisikan kontrak pembacaan data akun.
+// AccountService defines the contract for reading account data.
 type AccountService interface {
 	GetAccount(ctx context.Context, id string) (*AccountInfo, error)
 }
 
-// Handler membundel seluruh dependensi router HTTP.
+// Handler bundles all HTTP router dependencies.
 type Handler struct {
 	transferService TransferService
 	accountService  AccountService
@@ -86,7 +86,7 @@ func NewHandler(
 	}
 }
 
-// TransferRequestPayload merepresentasikan DTO body request transfer JSON.
+// TransferRequestPayload represents JSON request body for transfers.
 type TransferRequestPayload struct {
 	DestinationAccountID string `json:"destination_account_id" binding:"required"`
 	SourceAccountID      string `json:"source_account_id" binding:"required"`
@@ -94,7 +94,7 @@ type TransferRequestPayload struct {
 	Description          string `json:"description"`
 }
 
-// HandleTransfer memproses endpoint POST /api/v1/transfers
+// HandleTransfer processes POST /api/v1/transfers endpoint
 func (h *Handler) HandleTransfer(c *gin.Context) {
 	var req TransferRequestPayload
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -102,7 +102,7 @@ func (h *Handler) HandleTransfer(c *gin.Context) {
 			"success": false,
 			"error": gin.H{
 				"code":        "INVALID_PAYLOAD",
-				"message":     "Format request tidak valid: " + err.Error(),
+				"message":     "Invalid request payload: " + err.Error(),
 				"status_code": http.StatusBadRequest,
 			},
 		})
@@ -168,7 +168,7 @@ func (h *Handler) HandleTransfer(c *gin.Context) {
 	})
 }
 
-// HandleGetBalance memproses endpoint GET /api/v1/accounts/:id/balance
+// HandleGetBalance processes GET /api/v1/accounts/:id/balance endpoint
 func (h *Handler) HandleGetBalance(c *gin.Context) {
 	accountID := c.Param("id")
 	if accountID == "" {
@@ -183,7 +183,7 @@ func (h *Handler) HandleGetBalance(c *gin.Context) {
 				"success": false,
 				"error": gin.H{
 					"code":        "ACCOUNT_NOT_FOUND",
-					"message":     "Rekening tidak ditemukan di sistem buku besar",
+					"message":     "Account not found in ledger system",
 					"status_code": http.StatusNotFound,
 				},
 			})

@@ -10,10 +10,10 @@ import (
 
 // ==============================================================================
 // Middleware: JWT Authentication & Role-Based Access Control (RBAC)
-// Dokumen Terkait: docs/SECURITY_GUIDE.md (Seksi 1) & docs/INTEGRATION.md (Seksi 2.1)
+// Related Documents: docs/SECURITY_GUIDE.md (Section 1) & docs/INTEGRATION.md (Section 2.1)
 // ==============================================================================
 
-// AuthMiddleware mengekstrak Bearer token dari header Authorization dan memverifikasinya.
+// AuthMiddleware extracts the Bearer token from the Authorization header and validates it.
 func AuthMiddleware(tokenManager *auth.TokenManager, allowedRoles ...auth.UserRole) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
@@ -22,7 +22,7 @@ func AuthMiddleware(tokenManager *auth.TokenManager, allowedRoles ...auth.UserRo
 				"success": false,
 				"error": gin.H{
 					"code":        "MISSING_AUTH_HEADER",
-					"message":     "Header 'Authorization: Bearer <token>' wajib disertakan",
+					"message":     "Header 'Authorization: Bearer <token>' is required",
 					"status_code": http.StatusUnauthorized,
 				},
 			})
@@ -36,7 +36,7 @@ func AuthMiddleware(tokenManager *auth.TokenManager, allowedRoles ...auth.UserRo
 				"success": false,
 				"error": gin.H{
 					"code":        "INVALID_AUTH_FORMAT",
-					"message":     "Format token otentikasi wajib menggunakan skema Bearer",
+					"message":     "Authentication token must use the Bearer scheme",
 					"status_code": http.StatusUnauthorized,
 				},
 			})
@@ -59,7 +59,7 @@ func AuthMiddleware(tokenManager *auth.TokenManager, allowedRoles ...auth.UserRo
 			return
 		}
 
-		// Validasi Role-Based Access Control (RBAC) jika ada batasan role
+		// Role-Based Access Control (RBAC) validation
 		if len(allowedRoles) > 0 {
 			roleAllowed := false
 			for _, role := range allowedRoles {
@@ -74,7 +74,7 @@ func AuthMiddleware(tokenManager *auth.TokenManager, allowedRoles ...auth.UserRo
 					"success": false,
 					"error": gin.H{
 						"code":        "FORBIDDEN_ROLE",
-						"message":     "Peran Anda tidak memiliki izin untuk mengakses sumber daya ini",
+						"message":     "Your role is not authorized to access this resource",
 						"status_code": http.StatusForbidden,
 					},
 				})
@@ -83,7 +83,7 @@ func AuthMiddleware(tokenManager *auth.TokenManager, allowedRoles ...auth.UserRo
 			}
 		}
 
-		// Simpan klaim ke dalam context Gin agar bisa dibaca oleh Handler berikutnya
+		// Store claims into Gin context for downstream handlers
 		c.Set("user_id", claims.UserID)
 		c.Set("username", claims.Username)
 		c.Set("role", claims.Role)

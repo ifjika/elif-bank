@@ -9,20 +9,20 @@ import (
 
 // ==============================================================================
 // Package hashchain: Cryptographic Tamper-Evident Ledger Audit Trail
-// Dokumen Terkait: docs/TSD.md (Seksi 2.2) & docs/PRD.md (Seksi 4)
+// Related Documents: docs/TSD.md (Section 2.2) & docs/PRD.md (Section 4)
 // Formula: SHA256(PreviousHash + AccountID + Amount + BalanceAfter + RFC3339Timestamp)
 // ==============================================================================
 
-// GenesisHash adalah nilai hash awal bagi akun baru yang belum memiliki riwayat mutasi.
+// GenesisHash is the initial seed hash for newly opened accounts with no prior history.
 const GenesisHash = "0000000000000000000000000000000000000000000000000000000000000000"
 
-// ComputeHash menghitung hash SHA-256 berantai untuk satu baris ledger entry.
+// ComputeHash calculates the chained SHA-256 hash for a single ledger entry row.
 func ComputeHash(previousHash, accountID string, amount, balanceAfter int64, createdAt time.Time) string {
 	if previousHash == "" {
 		previousHash = GenesisHash
 	}
 
-	// Gunakan format timestamp RFC3339Nano deterministik agar konsisten
+	// Use deterministic RFC3339Nano timestamp formatting for consistency
 	payload := fmt.Sprintf("%s|%s|%d|%d|%s",
 		previousHash,
 		accountID,
@@ -36,7 +36,7 @@ func ComputeHash(previousHash, accountID string, amount, balanceAfter int64, cre
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
-// VerifyHash memvalidasi apakah currentHash pada baris buku besar cocok dengan payload aslinya.
+// VerifyHash validates whether the currentHash on a ledger row matches its payload.
 func VerifyHash(previousHash, accountID string, amount, balanceAfter int64, createdAt time.Time, currentHash string) bool {
 	expected := ComputeHash(previousHash, accountID, amount, balanceAfter, createdAt)
 	return expected == currentHash

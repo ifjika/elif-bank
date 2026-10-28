@@ -1,43 +1,44 @@
 # Testing Guide & Quality Assurance: AethelCore Engine
 
-Dokumen ini mendefinisikan standar pengujian kode (*testing standards*), pola penulisan tes unit/integrasi dengan pola AAA (Arrange-Act-Assert), aturan mocking interface, simulasi beban konkurensi, dan otomatisasi test runner di pipeline CI/CD.
+This document defines testing standards, the Arrange-Act-Assert (AAA) pattern for unit and integration tests, interface mocking rules, concurrency load simulation, and automated test runners in the CI/CD pipeline.
 
 ---
 
-## 1. Filosofi Pengujian Perbankan
+## 1. Banking Testing Philosophy
 
-Di sistem perbankan, *bug* bukan sekadar masalah tampilan, melainkan potensi kerugian finansial riil atau pelanggaran hukum perbankan. Oleh karena itu, pengujian harus menjamin:
-1. **Zero Math Errors**: Tidak boleh ada pembulatan saldo yang hilang satu rupiah pun.
-2. **Determinisme Konkurensi**: Tidak boleh ada kondisi di mana dua goroutine mendebit rekening yang sama dan lolos melebihi batas saldo (*race condition*).
-3. **Invarian Akuntansi Mutlak**: $\sum \text{Debit} - \sum \text{Kredit} = 0$ dalam setiap operasi transaksi.
+In banking software, software defects are not mere cosmetic issues; they represent direct financial loss and regulatory non-compliance. Testing must guarantee:
+
+1. **Zero Math Errors**: Zero penny-rounding discrepancy under any calculation scenario.
+2. **Concurrency Determinism**: Zero instances of race conditions where concurrent goroutines overdraw an account.
+3. **Absolute Accounting Invariants**: $\sum \text{Debit} - \sum \text{Credit} = 0$ in every single transaction mutation.
 
 ---
 
-## 2. Struktur Tes Unit: Pola Arrange-Act-Assert (AAA)
+## 2. Unit Test Structure: Arrange-Act-Assert (AAA) Pattern
 
-Setiap fungsi tes di Golang wajib ditulis dengan pola tiga tahap yang terisolasi:
+Every Go test function must follow three isolated phases:
 
 ```go
 func TestTransferUsecase_InsufficientBalance(t *testing.T) {
-    // 1. ARRANGE (Siapkan kondisi awal, data tiruan, dan mock)
+    // 1. ARRANGE (Setup initial state, dummy data, and repository mocks)
     mockRepo := new(MockLedgerRepo)
     usecase := NewTransferUsecase(mockRepo)
-    
+
     sourceAcc := &domain.Account{
         ID:      "acc_001",
-        Balance: 500000, // Saldo hanya Rp 500.000
+        Balance: 500000, // Balance is only IDR 500,000
         Status:  "ACTIVE",
     }
     mockRepo.On("GetByID", "acc_001").Return(sourceAcc, nil)
 
-    // 2. ACT (Jalankan fungsi yang diuji dengan nominal yang melebihi saldo)
+    // 2. ACT (Execute use case with an amount exceeding available balance)
     err := usecase.ExecuteTransfer(context.Background(), TransferCmd{
         SourceID:      "acc_001",
         DestinationID: "acc_002",
-        Amount:        1000000, // Mencoba transfer Rp 1.000.000
+        Amount:        1000000, // Attempting to transfer IDR 1,000,000
     })
 
-    // 3. ASSERT (Pastikan hasil sesuai ekspektasi: harus error dan saldo tidak berubah)
+    // 3. ASSERT (Verify outcome: must fail with ErrInsufficientFunds, balance untouched)
     assert.Error(t, err)
     assert.Equal(t, domain.ErrInsufficientFunds, err)
     assert.Equal(t, int64(500000), sourceAcc.Balance)
@@ -46,31 +47,34 @@ func TestTransferUsecase_InsufficientBalance(t *testing.T) {
 
 ---
 
-## 3. Pengujian Konkurensi & Deteksi Race Condition
+## 3. Concurrency Testing & Race Condition Detection
 
-Untuk membuktikan keandalan sistem terhadap *race condition*, tes integrasi dijalankan menggunakan flag bawaan Go:
+To verify concurrency resilience, integration tests are executed with Go's race detector:
+
 ```bash
 go test -race -v ./...
 ```
 
-### 3.1 Skrip Simulasi Stress Test Konkurensi (500 Goroutines)
-Pengujian dijalankan dengan membuat 500 goroutine paralel yang secara bersamaan mencoba mendebit Rp 10.000 dari rekening yang hanya memiliki saldo Rp 100.000.
-* **Ekspektasi**: Tepat 10 goroutine pertama berhasil, dan 490 goroutine sisanya harus menerima pesan penolakan `Insufficient Funds`. Saldo akhir wajib tepat **Rp 0** (tidak boleh minus).
+### 3.1 Concurrency Stress Test Simulation (500 Goroutines)
+
+Tests simulate 500 parallel goroutines concurrently attempting to debit IDR 10,000 from an account holding only IDR 100,000.
+
+- **Expectation**: Exactly the first 10 goroutines succeed; the remaining 490 goroutines receive `Insufficient Funds` errors. The final account balance must remain exactly **IDR 0** (no negative balances allowed).
 
 ---
 
-## 4. Konfigurasi CI/CD Runner (GitHub Actions)
+## 4. CI/CD Runner Configuration (GitHub Actions)
 
-File `.github/workflows/ci-pipeline.yml` akan secara otomatis menjalankan seluruh rangkaian tes setiap kali ada kode baru yang di-*push* ke repository:
+The `.github/workflows/ci-pipeline.yml` workflow automatically runs the complete test suite on every git push:
 
 ```yaml
 name: AethelCore CI Pipeline
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
   pull_request:
-    branches: [ main, master ]
+    branches: [main, master]
 
 jobs:
   test-and-lint:
@@ -78,16 +82,15 @@ jobs:
     runs-on: ubuntu-latest
 
     services:
-      postgres:
-        image: postgres:16-alpine
+      mysql:
+        image: mysql:8.0
         env:
-          POSTGRES_DB: aethel_core_test
-          POSTGRES_USER: test_user
-          POSTGRES_PASSWORD: test_password
+          MYSQL_DATABASE: aethel_bank_test
+          MYSQL_ROOT_PASSWORD: test_root_password
         ports:
-          - 5432:5432
+          - 3306:3306
         options: >-
-          --health-cmd pg_isready
+          --health-cmd="mysqladmin ping"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -99,7 +102,7 @@ jobs:
       - name: Setup Go Runtime
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: "1.23"
           cache: true
 
       - name: Run GolangCI-Lint
@@ -116,4 +119,4 @@ jobs:
           go tool cover -func=coverage.out
 ```
 
-Dengan pipeline ini, kredensial dan profesionalitas kode Anda terjamin karena setiap baris kode diuji secara otomatis di cloud GitHub secara gratis.
+This automated pipeline provides automated quality gating, ensuring code correctness before pull requests can be merged.

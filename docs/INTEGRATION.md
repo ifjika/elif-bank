@@ -1,14 +1,14 @@
 # Integration & API Specification: AethelCore Engine
 
-Dokumen ini mendokumentasikan spesifikasi kontrak antarmuka API eksternal (RESTful & GraphQL), payload error berstandar industri, penanganan *webhook/event*, serta mekanisme integrasi layanan pihak ketiga.
+This document specifies external API interface contracts (RESTful & GraphQL), industry-standard error payloads, event/webhook delivery formats, and third-party integration mechanisms.
 
 ---
 
-## 1. Standar Format Respons & Error (RFC 7807)
+## 1. Response & Error Standards (RFC 7807)
 
-Seluruh endpoint REST API di lapisan API Gateway (Gin) mengembalikan struktur respons terpadu.
+All REST API endpoints in the API Gateway (Gin) return unified response payloads.
 
-### 1.1 Format Respons Sukses
+### 1.1 Success Response Format
 ```json
 {
   "success": true,
@@ -25,18 +25,18 @@ Seluruh endpoint REST API di lapisan API Gateway (Gin) mengembalikan struktur re
 }
 ```
 
-### 1.2 Format Respons Error Standar (RFC 7807 Problem Details)
+### 1.2 Standard Error Response Format (RFC 7807 Problem Details)
 ```json
 {
   "success": false,
   "error": {
     "code": "INSUFFICIENT_FUNDS",
-    "message": "Saldo efektif rekening asal tidak mencukupi untuk nominal transaksi ini.",
+    "message": "Available balance in source account is insufficient for this transaction amount.",
     "status_code": 422,
     "details": [
       {
         "field": "amount",
-        "issue": "Requested 5.000.000 IDR exceeds available balance 1.250.000 IDR"
+        "issue": "Requested 5,000,000 IDR exceeds available balance 1,250,000 IDR"
       }
     ],
     "reference_id": "req_a1b2c3d4-e5f6-7890"
@@ -44,26 +44,26 @@ Seluruh endpoint REST API di lapisan API Gateway (Gin) mengembalikan struktur re
 }
 ```
 
-### 1.3 Kamus Kode Error (Error Codes Dictionary)
+### 1.3 Error Codes Dictionary
 
-| Kode Error | HTTP Status | Deskripsi |
+| Error Code | HTTP Status | Description |
 | :--- | :--- | :--- |
-| `UNAUTHORIZED` | 401 | Token JWT tidak valid, kedaluwarsa, atau tidak disertakan. |
-| `FORBIDDEN_MAKER_CHECKER`| 403 | Maker dilarang menyetujui transaksi buatannya sendiri. |
-| `ACCOUNT_NOT_ACTIVE` | 422 | Rekening sumber atau tujuan berstatus `FROZEN`, `DORMANT`, atau `CLOSED`. |
-| `INSUFFICIENT_FUNDS` | 422 | Saldo efektif (*available balance*) kurang dari nominal debit. |
-| `DUPLICATE_IDEMPOTENCY_KEY`| 409 / 200 | Kunci idempotensi sedang diproses atau sudah berhasil dieksekusi sebelumnya. |
-| `RATE_LIMIT_EXCEEDED` | 429 | Klien melampaui kuota panggilan per detik (*Token Bucket* penuh). |
-| `INTERNAL_LEDGER_ERROR` | 500 | Anomali sistem buku besar atau ketidakseimbangan invarian akuntansi. |
+| `UNAUTHORIZED` | 401 | JWT token is missing, invalid, or expired. |
+| `FORBIDDEN_MAKER_CHECKER`| 403 | Originating Maker is forbidden from approving their own transaction. |
+| `ACCOUNT_NOT_ACTIVE` | 422 | Source or destination account status is `FROZEN`, `DORMANT`, or `CLOSED`. |
+| `INSUFFICIENT_FUNDS` | 422 | Available balance is less than required debit amount. |
+| `DUPLICATE_IDEMPOTENCY_KEY`| 409 / 200 | Idempotency key is currently being processed or already succeeded. |
+| `RATE_LIMIT_EXCEEDED` | 429 | Client exceeded request rate limit (*Token Bucket* exhausted). |
+| `INTERNAL_LEDGER_ERROR` | 500 | Core ledger anomaly or broken accounting balance invariant. |
 
 ---
 
-## 2. Kontrak RESTful API (Ingress Gateway)
+## 2. RESTful API Contracts (Ingress Gateway)
 
-### 2.1 Autentikasi Pengguna & Sesi (OAuth2 / JWT)
+### 2.1 User Authentication & Sessions (OAuth2 / JWT)
 * **`POST /api/v1/auth/login`**
   * **Header**: `Content-Type: application/json`
-  * **Body Request**:
+  * **Request Body**:
     ```json
     {
       "username": "teller_jkt01",
@@ -71,58 +71,58 @@ Seluruh endpoint REST API di lapisan API Gateway (Gin) mengembalikan struktur re
       "role": "TELLER"
     }
     ```
-  * **Respons**: Mengembalikan `access_token` (JWT berumur 15 menit) dan `refresh_token` (berumur 7 hari).
+  * **Response**: Returns `access_token` (15-minute TTL) and `refresh_token` (7-day TTL).
 
-### 2.2 Transfer Antar-Rekening (P2P Transfer)
+### 2.2 Peer-to-Peer Transfer (P2P Transfer)
 * **`POST /api/v1/transfers`**
-  * **Header Wajib**:
+  * **Mandatory Headers**:
     * `Authorization: Bearer <jwt_token>`
     * `X-Idempotency-Key: <unique_uuid_v4>`
-  * **Body Request**:
+  * **Request Body**:
     ```json
     {
       "source_account_number": "1001000012",
       "destination_account_number": "1001000045",
       "amount": 2500000,
-      "description": "Pembayaran Invoice #8821"
+      "description": "Invoice Payment #8821"
     }
     ```
-  * **Catatan**: Satuan `amount` adalah Rupiah penuh (integer tanpa desimal).
+  * **Note**: `amount` is specified in whole integer units (Rupiah without decimals).
 
-### 2.3 Transaksi Setor & Tarik Tunai Cabang (Branch Cash)
+### 2.3 Branch Cash Transactions (Cash Deposit & Withdrawal)
 * **`POST /api/v1/branch/cash-transactions`**
-  * **Header Wajib**: `Authorization: Bearer <teller_jwt>`, `X-Idempotency-Key: <uuid>`
-  * **Body Request**:
+  * **Mandatory Headers**: `Authorization: Bearer <teller_jwt>`, `X-Idempotency-Key: <uuid>`
+  * **Request Body**:
     ```json
     {
       "account_number": "1001000012",
       "transaction_type": "CASH_WITHDRAWAL",
       "amount": 75000000,
-      "notes": "Penarikan kas nasabah korporat"
+      "notes": "Corporate customer cash withdrawal"
     }
     ```
-  * **Logika Respons**:
-    * Jika nominal $\le \text{Rp50.000.000} \to$ Langsung sukses (`status: "POSTED"`).
-    * Jika nominal $> \text{Rp50.000.000} \to$ Menunggu otorisasi (`status: "PENDING_APPROVAL"`).
+  * **Response Logic**:
+    * If amount $\le \text{IDR 50,000,000} \to$ Immediate execution (`status: "POSTED"`).
+    * If amount $> \text{IDR 50,000,000} \to$ Awaiting supervisor approval (`status: "PENDING_APPROVAL"`).
 
-### 2.4 Otorisasi Transaksi oleh Supervisor (Checker)
+### 2.4 Supervisor Authorization (Checker)
 * **`POST /api/v1/branch/approvals/:transaction_id`**
-  * **Header Wajib**: `Authorization: Bearer <supervisor_jwt>`
-  * **Body Request**:
+  * **Mandatory Header**: `Authorization: Bearer <supervisor_jwt>`
+  * **Request Body**:
     ```json
     {
       "action": "APPROVE", 
-      "notes": "Dokumen verifikasi fisik KTP & buku tabungan terverifikasi"
+      "notes": "Physical customer ID and passbook verification confirmed"
     }
     ```
 
 ---
 
-## 3. Kontrak GraphQL (Backoffice & Audit Console)
+## 3. GraphQL Contracts (Backoffice & Audit Console)
 
-Endpoint GraphQL (`/graphql`) digunakan oleh konsol manajemen untuk menarik relasi data yang kompleks secara efisien.
+The `/graphql` endpoint is used by management and audit consoles to fetch nested data graphs efficiently.
 
-### 3.1 Skema Query GraphQL (Contoh)
+### 3.1 GraphQL Schema Example
 ```graphql
 type Account {
   id: ID!
@@ -136,7 +136,7 @@ type Account {
 
 type LedgerEntry {
   id: ID!
-  entryType: String! # DR atau CR
+  entryType: String! # DR or CR
   amount: Float!
   balanceAfter: Float!
   previousHash: String!
@@ -152,12 +152,12 @@ type Query {
 
 ---
 
-## 4. Format Webhook & Event Streaming (Kafka / Redpanda)
+## 4. Webhook & Event Streaming Format (Kafka / Redpanda)
 
-Setiap transaksi yang berhasil dibukukan (*committed*) ke dalam database PostgreSQL akan menerbitkan event ke topik Kafka menggunakan pola **Transactional Outbox**.
+Every transaction successfully committed into the database emits an event to Kafka via the **Transactional Outbox Pattern**.
 
 * **Topic**: `core.ledger.transaction-posted.v1`
-* **Key**: `account_id` (menjamin pesan untuk rekening yang sama diproses secara urut/FIFO)
+* **Key**: `account_id` (guarantees FIFO partition ordering for each account)
 * **Payload**:
 ```json
 {
