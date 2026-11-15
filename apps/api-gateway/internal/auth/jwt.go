@@ -65,7 +65,7 @@ func (m *TokenManager) GenerateToken(userID, username string, role UserRole, bra
 			ExpiresAt: jwt.NewNumericDate(now.Add(m.tokenDuration)),
 			IssuedAt:  jwt.NewNumericDate(now),
 			NotBefore: jwt.NewNumericDate(now),
-			Issuer:    "aethelcore-auth-gateway",
+			Issuer:    "elif-core-bank-auth-gateway",
 		},
 	}
 
