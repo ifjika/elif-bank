@@ -12,9 +12,9 @@ AethelCore is designed following **Clean Architecture (Hexagonal / Ports & Adapt
 2. **Concurrency Determinism**: The core ledger transaction layer executes balance mutations sequentially and in isolation without risks of cyclic deadlocks.
 3. **Auditability by Design**: Every balance mutation triggers cryptographic audit hash chaining (SHA-256) within the database transaction.
 4. **Unified Database of Record & Caching**:
-   * **MySQL 8.0 / TiDB (PingCAP)**: Serves as the *Primary Ledger & Identity Store of Record* (ACID transactions, pessimistic row locking, BIGINT precision, and distributed scalability).
-   * **Redis**: Handles *Distributed Locks*, *Token Bucket Rate Limiting*, and *Idempotency Caching*.
-   * **Kafka / Redpanda**: Asynchronous event broker distributing mutation events via the *Transactional Outbox Pattern*.
+   - **MySQL 8.0 / TiDB (PingCAP)**: Serves as the _Primary Ledger & Identity Store of Record_ (ACID transactions, pessimistic row locking, BIGINT precision, and distributed scalability).
+   - **Redis**: Handles _Distributed Locks_, _Token Bucket Rate Limiting_, and _Idempotency Caching_.
+   - **Kafka / Redpanda**: Asynchronous event broker distributing mutation events via the _Transactional Outbox Pattern_.
 
 ---
 
@@ -79,12 +79,12 @@ AethelCore is designed following **Clean Architecture (Hexagonal / Ports & Adapt
 ## 3. Inter-Service Communication Protocols
 
 1. **External to API Gateway (Inbound)**:
-   * **RESTful HTTP/JSON** via **Gin**: Used for customer and teller transactional operations (e.g., Funds Transfer, Cash Deposit, Cash Withdrawal).
-   * **GraphQL** (`gqlgen`): Used for backoffice management, fetching complex ledger relations, and audit reporting without over-fetching.
+   - **RESTful HTTP/JSON** via **Gin**: Used for customer and teller transactional operations (e.g., Funds Transfer, Cash Deposit, Cash Withdrawal).
+   - **GraphQL** (`gqlgen`): Used for backoffice management, fetching complex ledger relations, and audit reporting without over-fetching.
 2. **Gateway to Core Ledger (Internal IPC)**:
-   * **gRPC / Protocol Buffers (HTTP/2)**: Provides ultra-low latency, compact binary serialization, and strictly typed interface contracts.
+   - **gRPC / Protocol Buffers (HTTP/2)**: Provides ultra-low latency, compact binary serialization, and strictly typed interface contracts.
 3. **Core Ledger to Background Workers (Asynchronous)**:
-   * **Transactional Outbox Pattern via Kafka / Redpanda**: Guarantees that every committed database transaction publishes an event without data loss from network partitions.
+   - **Transactional Outbox Pattern via Kafka / Redpanda**: Guarantees that every committed database transaction publishes an event without data loss from network partitions.
 
 ---
 
@@ -109,8 +109,9 @@ HTTP / gRPC Request
 ```
 
 **Benefits**:
-* Business logic remains decoupled from SQL queries or web frameworks.
-* Replacing databases or adding new adapters requires zero changes to the Use Case layer (*Dependency Inversion Principle*).
+
+- Business logic remains decoupled from SQL queries or web frameworks.
+- Replacing databases or adding new adapters requires zero changes to the Use Case layer (_Dependency Inversion Principle_).
 
 ---
 
@@ -142,9 +143,11 @@ elif-bank/
 │   ├── worker-eod/                  # Go: Day-end rollover batch engine (EOD)
 │   │   ├── cmd/worker/main.go
 │   │   └── go.mod
-│   └── simulator-cron/              # Go: Autonomous transactional generator
-│       ├── cmd/simulator/main.go
-│       └── go.mod
+│   ├── simulator-cron/              # Go: Autonomous transactional generator
+│   │   ├── cmd/simulator/main.go
+│   │   └── go.mod
+│   ├── web-console/                 # React.js + Vite: Branch Console (Teller, Supervisor & Audit)
+│   └── mobile-banking/              # React Native / Expo: Customer M-Banking Application
 ├── pkg/                             # Shared utility packages
 │   ├── hashchain/                   # SHA-256 hash chaining utilities
 │   ├── idempotency/                 # Redis idempotency middleware & logic

@@ -1,4 +1,4 @@
-# AethelCore Engine (elif-bank)
+# Elif Bank (Elif Core Bank Engine)
 
 [![Go Version](https://img.shields.io/badge/Go-1.23%2B-00ADD8?style=flat&logo=go)](https://go.dev/)
 [![Architecture](https://img.shields.io/badge/Architecture-Hexagonal%20%2F%20Clean-orange?style=flat)]()
@@ -6,7 +6,7 @@
 [![Database](https://img.shields.io/badge/Database-MySQL%208.0%20%7C%20TiDB%20%7C%20Redis-blueviolet?style=flat)]()
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-AethelCore (**elif-bank**) is a high-performance, distributed **Mini Core Banking System (CBS)** engineered in **Golang**. It replicates the mission-critical financial backend operations of modern enterprise banks, implementing double-entry accounting standards, ACID transaction isolation with strict concurrency determinism, branch governance (_Maker-Checker / Four-Eyes Principle_), tamper-evident cryptographic audit trails, and resilient API Gateway ingress.
+**Elif Bank** (with its core transaction engine **Elif Core Bank**) is a high-performance, distributed **Mini Core Banking System (CBS)** engineered in **Golang**. It replicates the mission-critical financial backend operations of modern enterprise banks, implementing double-entry accounting standards, ACID transaction isolation with strict concurrency determinism, branch governance (_Maker-Checker / Four-Eyes Principle_), tamper-evident cryptographic audit trails, and resilient API Gateway ingress.
 
 The system is designed for **MySQL 8.0 protocol compatibility** and native support for **TiDB Cloud Serverless (PingCAP)**—delivering distributed HTAP scalability with standard MySQL tooling.
 
@@ -19,7 +19,7 @@ Hi, I'm **Jika**!
 - 🐙 **GitHub**: [@ifjika](https://github.com/ifjika)
 - 🌐 **Portfolio Website**: [ifjika-dev.vercel.app](https://ifjika-dev.vercel.app)
 
-I engineered this project as an end-to-end deep dive into **Core Banking System (CBS) architecture**. Commercial core banking systems serve as the critical heartbeat of modern financial infrastructure—where software bugs translate to direct monetary loss or regulatory failures. My objective with **AethelCore** is to demystify and master the foundational mechanics of high-concurrency ledger design, zero-deadlock row locking, cryptographic data integrity, and enterprise-grade distributed transaction patterns in Go on a modern distributed SQL database (MySQL / TiDB).
+I engineered this project as an end-to-end deep dive into **Core Banking System (CBS) architecture**. Commercial core banking systems serve as the critical heartbeat of modern financial infrastructure—where software bugs translate to direct monetary loss or regulatory failures. My objective with **Elif Bank** is to demystify and master the foundational mechanics of high-concurrency ledger design, zero-deadlock row locking, cryptographic data integrity, and enterprise-grade distributed transaction patterns in Go on a modern distributed SQL database (MySQL / TiDB).
 
 ---
 
@@ -126,7 +126,9 @@ elif-bank/
 │   │   ├── internal/domain/         # Pure Entities (Account, Transaction, LedgerEntry) & Ports
 │   │   └── internal/usecase/        # Transfer Engine, Locking Algorithms & Hash Chaining
 │   ├── worker-eod/                  # Scheduled End-of-Day (EOD) Batch Engine (Interest Accrual, Taxes)
-│   └── simulator-cron/              # Autonomous High-Frequency Synthetic Transaction Generator
+│   ├── simulator-cron/              # Autonomous High-Frequency Synthetic Transaction Generator
+│   ├── web-console/                 # React.js + Vite: Branch Console (Teller, Supervisor & Audit)
+│   └── mobile-banking/              # Customer Mobile Banking App (React Native / Expo)
 ├── pkg/                             # Shared Reusable Go Libraries
 │   ├── hashchain/                   # SHA-256 Linked-List Cryptographic Audit Hasher
 │   └── money/                       # Overflow-protected Fixed-Point Integer Arithmetic

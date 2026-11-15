@@ -119,12 +119,16 @@ elif-bank/
 │   ├── simulator-cron/          # Go: Autonomous synthetic traffic generator
 │   │   ├── cmd/simulator/main.go
 │   │   └── go.mod
-│   └── web-console/             # Next.js 15: Teller, Supervisor & Customer portal
+│   ├── web-console/             # React.js + Vite: Branch Console (Teller, Supervisor & Audit)
+│   │   ├── src/
+│   │   │   ├── features/        # Modular domain features (auth, branch-teller, branch-supervisor, audit)
+│   │   │   ├── layouts/         # Layout components (BranchLayout, AuthLayout)
+│   │   │   └── components/ui/   # Design system primitives
+│   │   └── package.json
+│   └── mobile-banking/          # React Native / Expo: Customer M-Banking Application
 │       ├── src/
-│       │   ├── app/
-│       │   │   ├── branch/      # Branch portal (Teller & Supervisor screens)
-│       │   │   └── customer/    # Mock Mobile Banking Viewport
-│       │   └── components/
+│       │   ├── navigation/      # Customer Tab & Stack navigators
+│       │   └── screens/         # Account balance, P2P transfer, QRIS & statements
 │       └── package.json
 ├── pkg/                         # Shared Go Packages
 │   ├── hashchain/               # SHA-256 linked-list engine for audit records
