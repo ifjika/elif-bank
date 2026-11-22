@@ -1,14 +1,14 @@
 export type UserRole = 'CUSTOMER' | 'TELLER' | 'SUPERVISOR' | 'ADMIN';
 
 export interface AuthUser {
-  userId: string;
+  user_id: string;
   username: string;
+  full_name: string;
   role: UserRole;
-  branchId?: string;
+  branch_id?: string;
 }
 
-export interface LoginResponse {
-  accessToken: string;
-  refreshToken: string;
+export interface AuthResponseData {
+  access_token: string;
   user: AuthUser;
 }

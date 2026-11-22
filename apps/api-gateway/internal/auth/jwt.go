@@ -55,6 +55,11 @@ func NewTokenManager(secretKey string, tokenDuration time.Duration) *TokenManage
 
 // GenerateToken generates a new JWT token signed with HMAC-SHA256.
 func (m *TokenManager) GenerateToken(userID, username string, role UserRole, branchID string) (string, error) {
+	return m.GenerateTokenWithID("", userID, username, role, branchID)
+}
+
+// GenerateTokenWithID generates a new JWT token with an explicit JTI (RegisteredClaims.ID) for revocation tracking.
+func (m *TokenManager) GenerateTokenWithID(tokenID, userID, username string, role UserRole, branchID string) (string, error) {
 	now := time.Now().UTC()
 	claims := BankClaims{
 		UserID:   userID,
@@ -62,6 +67,7 @@ func (m *TokenManager) GenerateToken(userID, username string, role UserRole, bra
 		Role:     role,
 		BranchID: branchID,
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        tokenID,
 			ExpiresAt: jwt.NewNumericDate(now.Add(m.tokenDuration)),
 			IssuedAt:  jwt.NewNumericDate(now),
 			NotBefore: jwt.NewNumericDate(now),

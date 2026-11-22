@@ -60,18 +60,24 @@ All REST API endpoints in the API Gateway (Gin) return unified response payloads
 
 ## 2. RESTful API Contracts (Ingress Gateway)
 
-### 2.1 User Authentication & Sessions (OAuth2 / JWT)
+### 2.1 User Authentication & Sessions (Banking-Grade JWT + HttpOnly Cookie)
 * **`POST /api/v1/auth/login`**
   * **Header**: `Content-Type: application/json`
   * **Request Body**:
     ```json
     {
-      "username": "teller_jkt01",
-      "password": "SuperSecretPassword123!",
-      "role": "TELLER"
+      "username": "teller_budi",
+      "password": "SuperSecretPassword123!"
     }
     ```
-  * **Response**: Returns `access_token` (15-minute TTL) and `refresh_token` (7-day TTL).
+  * **Response (`200 OK`)**:
+    * JSON Body: Returns `access_token` (15-minute TTL, stored strictly in-memory by the web client) and `user` profile (role derived authoritatively from `app_users`).
+    * `Set-Cookie` Header: Sets `refresh_token` (7-day TTL) with `HttpOnly; SameSite=Strict; Path=/api/v1/auth` (and `Secure` in HTTPS).
+* **`POST /api/v1/auth/refresh`**
+  * **Cookie Required**: `refresh_token` (`HttpOnly`)
+  * **Response (`200 OK`)**: Validates stateful refresh session and returns a fresh 15-minute `access_token` + `user` profile.
+* **`POST /api/v1/auth/logout`**
+  * **Response (`200 OK`)**: Revokes the stateful refresh token and clears the `refresh_token` cookie (`Max-Age=0`).
 
 ### 2.2 Peer-to-Peer Transfer (P2P Transfer)
 * **`POST /api/v1/transfers`**

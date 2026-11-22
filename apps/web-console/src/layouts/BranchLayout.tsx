@@ -1,16 +1,14 @@
-import { Badge } from '@/components/ui/Badge';
-import { UserRole } from '@/types/auth';
 import React from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { Badge } from '@/components/ui/Badge';
+import { useAuth } from '@/features/auth/context/AuthContext';
 
 export const BranchLayout: React.FC = () => {
   const navigate = useNavigate();
-  const userJson = localStorage.getItem('user_info');
-  const user = userJson ? JSON.parse(userJson) : { username: 'Operator', role: 'TELLER' as UserRole };
+  const { user, logout } = useAuth();
 
-  const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('user_info');
+  const handleLogout = async () => {
+    await logout();
     navigate('/login');
   };
 
@@ -28,9 +26,9 @@ export const BranchLayout: React.FC = () => {
 
           <div className="flex items-center space-x-4">
             <div className="text-right">
-              <div className="text-sm font-medium">{user.username}</div>
-              <Badge variant={user.role === 'SUPERVISOR' ? 'warning' : 'neutral'} className="text-[10px]">
-                {user.role}
+              <div className="text-sm font-medium">{user?.full_name || user?.username || 'Operator'}</div>
+              <Badge variant={user?.role === 'SUPERVISOR' ? 'warning' : 'neutral'} className="text-[10px]">
+                {user?.role || 'OPERATOR'}
               </Badge>
             </div>
             <button
@@ -45,7 +43,7 @@ export const BranchLayout: React.FC = () => {
         {/* Sub-nav Links */}
         <div className="bg-slate-800/60 border-t border-slate-700/50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-6">
-            {user.role === 'TELLER' && (
+            {user?.role === 'TELLER' && (
               <>
                 <NavLink
                   to="/branch/teller"
@@ -75,7 +73,7 @@ export const BranchLayout: React.FC = () => {
               </>
             )}
 
-            {user.role === 'SUPERVISOR' && (
+            {user?.role === 'SUPERVISOR' && (
               <>
                 <NavLink
                   to="/branch/supervisor"

@@ -59,8 +59,8 @@ Access permissions are enforced based on the caller's verified JWT claims:
 
 - **Attack Vector**: Injecting malicious SQL syntax into transaction description or name search fields.
 - **Mitigation**:
-  - Strict prohibition of dynamic SQL string concatenation. All SQL queries use parameterized placeholders via `pgx` and `sqlx`.
-  - Input payload sanitization and schema validation using `go-playground/validator`.
+  - Strict prohibition of dynamic SQL string concatenation. All SQL queries use parameterized placeholders (`?`) via Go `database/sql` / MySQL-TiDB driver.
+  - Input payload sanitization and schema validation using `go-playground/validator` / Gin binding.
 
 ---
 
@@ -71,5 +71,9 @@ Access permissions are enforced based on the caller's verified JWT claims:
    - All configurations are injected via Environment Variables or `.env` files explicitly listed in `.gitignore`.
 2. **Credential Password Hashing**:
    - All user passwords in `app_users` are salted and hashed using **Argon2id** or **Bcrypt** with a work factor $\ge 12$.
-3. **Audit Trails Without Sensitive PII**:
+3. **Banking-Grade Client Token Storage (Anti-XSS)**:
+   - Web Console (`apps/web-console`) is strictly forbidden from persisting JWTs in `localStorage` or `sessionStorage`.
+   - **Access Token (15m)**: Held strictly in-memory (JavaScript RAM state).
+   - **Refresh Token (7d)**: Stored exclusively in an **`HttpOnly; Secure; SameSite=Strict`** cookie scoped to `/api/v1/auth`.
+4. **Audit Trails Without Sensitive PII**:
    - Application telemetry logs (Stdout, Grafana Loki) must redact raw PINs, card CVVs, and complete authorization tokens.
