@@ -1,6 +1,8 @@
-# High-Level Architecture & System Design: AethelCore Engine
+# High-Level Architecture & System Design: Elif Core Bank (Elif Bank)
 
-This document details the high-level architectural patterns, system topology diagram, inter-service communication strategies, and project directory hierarchy of AethelCore, tailored for a Go Workspaces (`go.work`) monorepo setup.
+> **Document Version:** `v1.2.0` | **Last Updated:** `2026-11-23` | **Status:** `Active`
+
+This document details the high-level architectural patterns, system topology diagram, inter-service communication strategies, and project directory hierarchy of Elif Core Bank, tailored for a Go Workspaces (`go.work`) monorepo setup.
 
 ---
 

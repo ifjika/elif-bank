@@ -32,6 +32,12 @@ type LedgerRepository interface {
 	// CreateTransaction saves the financial transaction header (transactions table).
 	CreateTransaction(ctx context.Context, tx *Transaction) error
 
+	// GetTransactionByIDWithLock locks and retrieves a transaction header (SELECT ... FOR UPDATE).
+	GetTransactionByIDWithLock(ctx context.Context, id string) (*Transaction, error)
+
+	// UpdateTransactionStatus updates status, checker_id, checker_notes, and approved_at.
+	UpdateTransactionStatus(ctx context.Context, tx *Transaction) error
+
 	// CreateLedgerEntries persists paired debit and credit journal entries (ledger_entries table).
 	CreateLedgerEntries(ctx context.Context, entries []LedgerEntry) error
 

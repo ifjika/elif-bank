@@ -1,4 +1,6 @@
-# Testing Guide & Quality Assurance: AethelCore Engine
+# Testing Guide & Quality Assurance: Elif Core Bank (Elif Bank)
+
+> **Document Version:** `v1.1.0` | **Last Updated:** `2026-11-23` | **Status:** `Active`
 
 This document defines testing standards, the Arrange-Act-Assert (AAA) pattern for unit and integration tests, interface mocking rules, concurrency load simulation, and automated test runners in the CI/CD pipeline.
 

@@ -13,11 +13,12 @@ import (
 	deliveryHttp "github.com/elif-bank/apps/api-gateway/internal/delivery/http"
 	"github.com/elif-bank/apps/api-gateway/internal/middleware"
 	"github.com/elif-bank/apps/api-gateway/internal/repository"
+	"github.com/elif-bank/apps/core-ledger/ledger"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
 
-// Mock implementation of TransferService for standalone Gateway execution
+// Mock implementation of TransferService for standalone P2P transfer route
 type dummyTransferService struct{}
 
 func (s *dummyTransferService) Execute(ctx context.Context, cmd deliveryHttp.TransferCommand) (*deliveryHttp.TransferResult, error) {
@@ -32,7 +33,7 @@ func (s *dummyTransferService) Execute(ctx context.Context, cmd deliveryHttp.Tra
 	}, nil
 }
 
-// Mock implementation of AccountService for standalone Gateway execution
+// Mock implementation of AccountService for standalone balance query route
 type dummyAccountService struct{}
 
 func (s *dummyAccountService) GetAccount(ctx context.Context, id string) (*deliveryHttp.AccountInfo, error) {
@@ -91,25 +92,30 @@ func main() {
 	defer func() { _ = db.Close() }()
 	log.Printf("✅ Connected to TiDB / MySQL (%s:%s/%s, SSL=%v)", dbCfg.Host, dbCfg.Port, dbCfg.Database, dbCfg.SSLMode)
 
-	// Seed initial operator accounts if app_users table is empty
+	// Seed initial operator accounts and demo ledger accounts if empty
 	if err := repository.SeedDemoUsersIfEmpty(ctx, db); err != nil {
 		log.Fatalf("❌ Failed to seed initial users: %v", err)
+	}
+	if err := ledger.SeedDemoAccountsIfEmpty(ctx, db); err != nil {
+		log.Fatalf("❌ Failed to seed initial ledger accounts: %v", err)
 	}
 
 	// Initialize dual TokenManagers (15m Access, 7d Refresh)
 	accessMgr := auth.NewTokenManager(accessSecret, 15*time.Minute)
 	refreshMgr := auth.NewTokenManager(refreshSecret, auth.RefreshTokenTTL)
 
-	// Initialize MySQL/TiDB UserRepository & AuthService
+	// Initialize Repositories & Services
 	userRepo := repository.NewMySQLUserRepository(db)
 	refreshStore := repository.NewInMemoryRefreshTokenStore()
 	authSvc := auth.NewAuthService(userRepo, refreshStore, accessMgr, refreshMgr)
+	ledgerSvc := ledger.NewService(db)
 
 	transferSvc := &dummyTransferService{}
 	accountSvc := &dummyAccountService{}
 
 	handler := deliveryHttp.NewHandler(transferSvc, accountSvc, accessMgr)
 	authHandler := deliveryHttp.NewAuthHandler(authSvc, cookieSecure)
+	branchHandler := deliveryHttp.NewBranchHandler(ledgerSvc)
 
 	router := gin.Default()
 
@@ -153,6 +159,15 @@ func main() {
 	{
 		api.POST("/transfers", handler.HandleTransfer)
 		api.GET("/accounts/:id/balance", handler.HandleGetBalance)
+
+		// Branch Operations (Maker-Checker RBAC Enforced)
+		branch := api.Group("/branch")
+		{
+			branch.POST("/cash-transactions", middleware.AuthMiddleware(accessMgr, auth.RoleTeller, auth.RoleAdmin), branchHandler.HandleCashTransaction)
+			branch.GET("/approvals/pending", middleware.AuthMiddleware(accessMgr, auth.RoleSupervisor, auth.RoleAdmin), branchHandler.HandleListPending)
+			branch.POST("/approvals/:transaction_id", middleware.AuthMiddleware(accessMgr, auth.RoleSupervisor, auth.RoleAdmin), branchHandler.HandleApproval)
+			branch.GET("/ledger-entries", middleware.AuthMiddleware(accessMgr, auth.RoleTeller, auth.RoleSupervisor, auth.RoleAdmin), branchHandler.HandleListLedgerEntries)
+		}
 	}
 
 	addr := ":" + port

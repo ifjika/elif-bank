@@ -1,5 +1,7 @@
 # Technical Specification Document (TSD): Elif Core Bank Engine
 
+> **Document Version:** `v1.3.0` | **Last Updated:** `2026-11-23` | **Status:** `Active`
+
 This technical specification details the database schema, low-level algorithmic designs, monetary math rules, and internal Golang domain interface contracts.
 
 The database is built on **MySQL 8.0 protocol compatibility** and fully optimized for **TiDB Cloud Serverless (PingCAP)** distributed HTAP clusters.
@@ -8,7 +10,7 @@ The database is built on **MySQL 8.0 protocol compatibility** and fully optimize
 
 ## 1. Relational Database Schema (MySQL 8.0 & TiDB)
 
-All 8 banking tables (`bank_branches`, `app_users`, `user_sessions`, `customers`, `accounts`, `transactions`, `ledger_entries`, and `outbox_events`) reside within a single unified relational schema (`deploy/migrations/mysql_tidb/000001_init_bank_schema.up.sql`).
+All 8 banking tables (`bank_branches`, `app_users`, `user_sessions`, `customers`, `accounts`, `transactions`, `ledger_entries`, and `outbox_events`) reside within a single unified relational schema (`deploy/migrations/mysql_tidb/000001_init_bank_schema.up.sql`), extended by `000002_add_tx_branch_accounts.up.sql` (`target_account_id`, `vault_account_id` on `transactions`, also idempotently verified at API Gateway startup via `ensureBranchTransactionColumns`).
 
 ```sql
 -- 1. Bank Branches Table

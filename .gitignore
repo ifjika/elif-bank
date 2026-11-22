@@ -5,6 +5,8 @@
 # Go Binaries & Build Cache
 bin/
 dist/
+tmp/
+build-errors.log
 *.exe
 *.exe~
 *.dll

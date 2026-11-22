@@ -1,8 +1,10 @@
-# Architectural Overview & System Specification: AethelCore Engine
+# Architectural Overview & System Specification: Elif Core Bank (Elif Bank)
 
-AethelCore is a distributed miniature Core Banking System (CBS) ecosystem built in Golang. It implements double-entry general ledger accounting standards, ACID transactions with concurrency determinism guarantees, branch operational governance (*Four-Eyes Principle / Maker-Checker*), tamper-evident cryptographic audit trails, and an autonomous cron-driven transactional workload generator.
+> **Document Version:** `v1.2.0` | **Last Updated:** `2026-11-23` | **Status:** `Active`
 
-The entire architecture is organized as a Polyglot Monorepo utilizing native Go Workspaces (`go.work`) to coordinate high-performance backend transaction processing, an API Gateway (*Backend-for-Frontend*), branch operational consoles, and telemetry systems.
+Elif Core Bank (**Elif Bank**) is a distributed miniature Core Banking System (CBS) ecosystem built in Golang. It implements double-entry general ledger accounting standards, ACID transactions with concurrency determinism guarantees, branch operational governance (_Four-Eyes Principle / Maker-Checker_), tamper-evident cryptographic audit trails, and an autonomous cron-driven transactional workload generator.
+
+The entire architecture is organized as a Polyglot Monorepo utilizing native Go Workspaces (`go.work`) to coordinate high-performance backend transaction processing, an API Gateway (_Backend-for-Frontend_), branch operational consoles, and telemetry systems.
 
 The database layer is unified on **MySQL 8.0 protocol compatibility** and native support for **TiDB Cloud Serverless (PingCAP)**.
 
@@ -45,7 +47,7 @@ The system models the fundamental pillars of modern commercial banking with stri
 
 - Manages customer deposit accounts: Individual Savings, Commercial Checking, and Time Deposits.
 - **Account State Machine**: `ACTIVE`, `FROZEN`, `DORMANT`, and `CLOSED`. Inactive accounts deterministically reject all new debit or credit mutations.
-- Strict separation between available balance (*available balance*) and reserved balance (*hold balance / escrow*) for loan collateral or authorization queues.
+- Strict separation between available balance (_available balance_) and reserved balance (_hold balance / escrow_) for loan collateral or authorization queues.
 
 ### 1.2 Double-Entry Transaction Engine
 
@@ -58,13 +60,14 @@ $$\sum \text{Debit} - \sum \text{Credit} = 0$$
 ### 1.3 Branch Operations & Governance (Maker-Checker)
 
 - Over-the-counter physical cash transactions $\le \text{IDR 50,000,000}$ are processed straight-through.
-- Cash transactions $> \text{IDR 50,000,000}$ automatically transition to `PENDING_APPROVAL`, requiring digital authorization from a branch Supervisor (*Checker*) before ledger mutation occurs (*Four-Eyes Principle*).
+- Cash transactions $> \text{IDR 50,000,000}$ automatically transition to `PENDING_APPROVAL`, requiring digital authorization from a branch Supervisor (_Checker_) before ledger mutation occurs (_Four-Eyes Principle_).
 
 ### 1.4 Lending & Amortization Subsystem
 
 Simulates loan disbursement, annuity repayment schedule calculation, and automated periodic installment debits.
 
 Automatic credit collectibility classification based on Days Past Due (DPD):
+
 - **KOL 1 (Current / Performing)**: 0 days overdue.
 - **KOL 2 (Special Mention)**: 1–90 days overdue.
 - **KOL 3 (Substandard)**: 91–120 days overdue.
@@ -74,13 +77,14 @@ Automatic credit collectibility classification based on Days Past Due (DPD):
 ### 1.5 End-of-Day (EOD) Batch Engine
 
 Autonomous module executing bank day-end rollover procedures:
+
 - Daily savings interest accrual:
 
 $$\text{Daily Interest} = \frac{\text{Closing Balance} \times \text{Interest Rate}}{365}$$
 
 - Automated withholding tax (20% PPh Final) on interest income.
 - Deduction of monthly maintenance fees and late payment penalties.
-- Trial balance consolidation to ensure zero imbalance across all *Chart of Accounts* (COA).
+- Trial balance consolidation to ensure zero imbalance across all _Chart of Accounts_ (COA).
 
 ### 1.6 Autonomous Traffic Generator
 
@@ -273,10 +277,10 @@ The `apps/simulator-cron` module acts as an autonomous transactional traffic gen
 
 ## 6. Performance Metrics & Quantitative Target Standards
 
-| Evaluation Metric | Production Target Standard | Validation Method |
-| :--- | :--- | :--- |
-| **ACID Mutation Throughput** | $\ge 2,500 \text{ TPS}$ | gRPC load testing using `ghz` |
-| **Transaction Latency (p99)** | $\le 20 \text{ ms}$ | Measured via Prometheus metric panels |
-| **Accounting Invariant Integrity** | $0 \text{ Anomalies}$ | Absolute $\sum \text{Debit} - \sum \text{Credit} = 0$ |
-| **Concurrency Resilience** | $0.00\% \text{ Race Conditions}$ | 500 parallel goroutines debiting 1 account |
-| **Backend Memory Footprint** | $\le 40 \text{ MB per pod}$ | Heap allocation profiling via `pprof` |
+| Evaluation Metric                  | Production Target Standard       | Validation Method                                     |
+| :--------------------------------- | :------------------------------- | :---------------------------------------------------- |
+| **ACID Mutation Throughput**       | $\ge 2,500 \text{ TPS}$          | gRPC load testing using `ghz`                         |
+| **Transaction Latency (p99)**      | $\le 20 \text{ ms}$              | Measured via Prometheus metric panels                 |
+| **Accounting Invariant Integrity** | $0 \text{ Anomalies}$            | Absolute $\sum \text{Debit} - \sum \text{Credit} = 0$ |
+| **Concurrency Resilience**         | $0.00\% \text{ Race Conditions}$ | 500 parallel goroutines debiting 1 account            |
+| **Backend Memory Footprint**       | $\le 40 \text{ MB per pod}$      | Heap allocation profiling via `pprof`                 |

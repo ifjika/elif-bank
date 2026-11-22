@@ -1,4 +1,6 @@
-# Application Flow & State Machines: AethelCore Engine
+# Application Flow & State Machines: Elif Core Bank (Elif Bank)
+
+> **Document Version:** `v1.0.0` | **Last Updated:** `2026-11-23` | **Status:** `Active`
 
 This document maps user flow diagrams, finite state machines (FSM) for transactions and accounts, and console navigational structures for banking operations.
 

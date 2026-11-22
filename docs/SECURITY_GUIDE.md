@@ -1,4 +1,6 @@
-# Security Guide & Threat Modeling: AethelCore Engine
+# Security Guide & Threat Modeling: Elif Core Bank (Elif Bank)
+
+> **Document Version:** `v1.2.0` | **Last Updated:** `2026-11-23` | **Status:** `Active`
 
 This document outlines cybersecurity policies, the role-based access control (RBAC) matrix, threat modeling mitigations (OWASP Top 10 API Security), input sanitization rules, and secrets management standards.
 

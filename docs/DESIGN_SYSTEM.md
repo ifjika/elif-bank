@@ -1,6 +1,8 @@
-# Design System & UX Standards: AethelCore Console
+# Design System & UX Standards: Elif Bank Console
 
-This document defines the visual user interface (UI) and user experience (UX) standards for the AethelCore banking console (Teller Portal, Branch Supervisor, and Customer Simulation). It provides clear design guidance that reflects enterprise-grade financial precision and reliability.
+> **Document Version:** `v1.1.0` | **Last Updated:** `2026-11-23` | **Status:** `Active`
+
+This document defines the visual user interface (UI) and user experience (UX) standards for the Elif Bank console (`shadcn/ui` Matrix/Trading Dark Green theme for Teller & Branch Supervisor portals, plus Customer Simulation). It provides clear design guidance that reflects enterprise-grade financial precision and reliability.
 
 ---
 

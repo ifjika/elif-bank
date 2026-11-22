@@ -1,8 +1,10 @@
 # Product Requirements Document (PRD)
 
-## Project: AethelCore - Mini Core Banking System (CBS)
+> **Document Version:** `v1.1.0` | **Last Updated:** `2026-11-23` | **Status:** `Active`
 
-This document details the product requirements, banking business logic, system boundaries, and target metrics for AethelCore. It is designed to be clear and accessible for engineers learning banking architectures and high-performance Golang backends.
+## Project: Elif Bank (Elif Core Bank) - Mini Core Banking System (CBS)
+
+This document details the product requirements, banking business logic, system boundaries, and target metrics for Elif Bank. It is designed to be clear and accessible for engineers learning banking architectures and high-performance Golang backends.
 
 ---
 

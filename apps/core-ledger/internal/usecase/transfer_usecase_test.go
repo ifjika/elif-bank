@@ -72,6 +72,25 @@ func (m *mockLedgerRepo) CreateTransaction(ctx context.Context, tx *domain.Trans
 	return nil
 }
 
+func (m *mockLedgerRepo) GetTransactionByIDWithLock(ctx context.Context, id string) (*domain.Transaction, error) {
+	for _, tx := range m.transactions {
+		if tx.ID == id {
+			return tx, nil
+		}
+	}
+	return nil, domain.ErrTxNotFound
+}
+
+func (m *mockLedgerRepo) UpdateTransactionStatus(ctx context.Context, tx *domain.Transaction) error {
+	for i, existing := range m.transactions {
+		if existing.ID == tx.ID {
+			m.transactions[i] = tx
+			return nil
+		}
+	}
+	return domain.ErrTxNotFound
+}
+
 func (m *mockLedgerRepo) CreateLedgerEntries(ctx context.Context, entries []domain.LedgerEntry) error {
 	m.entries = append(m.entries, entries...)
 	return nil

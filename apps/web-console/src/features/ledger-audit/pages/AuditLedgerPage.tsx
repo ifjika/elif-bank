@@ -1,89 +1,128 @@
-import React from 'react';
-import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { AuditLedgerSkeleton } from '@/components/ui/PageSkeletons';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { apiClient } from '@/lib/apiClient';
 import { formatRupiah } from '@/lib/formatters';
+import { AxiosError } from 'axios';
+import React, { useCallback, useEffect, useState } from 'react';
+
+interface AuditLedgerRow {
+  id: number;
+  transaction_id: string;
+  account_number: string;
+  entry_type: 'DR' | 'CR';
+  amount: number;
+  balance_after: number;
+  previous_hash: string;
+  current_hash: string;
+  created_at: string;
+}
 
 export const AuditLedgerPage: React.FC = () => {
-  const auditEntries = [
-    {
-      id: 1042,
-      txId: 'tx_a1b2c3d4-e5f6',
-      accountNumber: '1001000001',
-      entryType: 'DR' as const,
-      amount: 350000,
-      balanceAfter: 650000,
-      currentHash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-      status: 'VERIFIED',
-      createdAt: '2026-11-15 14:10:00',
-    },
-    {
-      id: 1043,
-      txId: 'tx_a1b2c3d4-e5f6',
-      accountNumber: '1001000002',
-      entryType: 'CR' as const,
-      amount: 350000,
-      balanceAfter: 850000,
-      currentHash: '8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4',
-      status: 'VERIFIED',
-      createdAt: '2026-11-15 14:10:00',
-    },
-  ];
+  const [auditEntries, setAuditEntries] = useState<AuditLedgerRow[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const fetchEntries = useCallback(async () => {
+    setIsLoading(true);
+    setErrorMsg(null);
+    try {
+      const res = await apiClient.get<{ success: boolean; data: AuditLedgerRow[] }>('/branch/ledger-entries');
+      setAuditEntries(res.data.data ?? []);
+    } catch (err) {
+      const axiosErr = err as AxiosError<{ error?: { message?: string } }>;
+      setErrorMsg(axiosErr.response?.data?.error?.message || 'Failed to load ledger audit entries.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchEntries();
+  }, [fetchEntries]);
+
+  if (isLoading) {
+    return <AuditLedgerSkeleton />;
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">General Ledger Audit & Cryptographic Chain</h1>
-          <p className="text-xs text-slate-500">Tamper-evident SHA-256 double-entry verification</p>
+          <h1 className="text-2xl font-bold text-white tracking-tight">General Ledger Audit &amp; Cryptographic Chain</h1>
+          <p className="text-xs font-mono text-zinc-400">Tamper-evident SHA-256 double-entry verification</p>
         </div>
-        <Badge variant="success">All Chains Valid (0 Anomalies)</Badge>
+        <div className="flex items-center gap-3">
+          <Badge variant="success">All Chains Valid (0 Anomalies)</Badge>
+          <Button variant="outline" size="sm" onClick={() => void fetchEntries()} className="font-mono text-xs">
+            Refresh
+          </Button>
+        </div>
       </div>
 
-      <Card>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 text-slate-600 uppercase border-b border-slate-200">
-              <tr>
-                <th className="py-3 px-4">Entry ID</th>
-                <th className="py-3 px-4">Tx Ref</th>
-                <th className="py-3 px-4">Account</th>
-                <th className="py-3 px-4">Type</th>
-                <th className="py-3 px-4">Amount</th>
-                <th className="py-3 px-4">Balance After</th>
-                <th className="py-3 px-4">SHA-256 Hash</th>
-                <th className="py-3 px-4">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {auditEntries.map((entry) => (
-                <tr key={entry.id} className="hover:bg-slate-50">
-                  <td className="py-3 px-4 font-mono font-medium">{entry.id}</td>
-                  <td className="py-3 px-4 font-mono text-blue-600">{entry.txId}</td>
-                  <td className="py-3 px-4 font-mono">{entry.accountNumber}</td>
-                  <td className="py-3 px-4">
-                    <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                        entry.entryType === 'DR'
-                          ? 'bg-rose-100 text-rose-800'
-                          : 'bg-emerald-100 text-emerald-800'
-                      }`}
-                    >
-                      {entry.entryType}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 font-mono font-semibold">{formatRupiah(entry.amount)}</td>
-                  <td className="py-3 px-4 font-mono text-slate-600">{formatRupiah(entry.balanceAfter)}</td>
-                  <td className="py-3 px-4 font-mono text-[10px] text-slate-400 max-w-[140px] truncate" title={entry.currentHash}>
-                    {entry.currentHash}
-                  </td>
-                  <td className="py-3 px-4">
-                    <Badge variant="success">🔒 Verified</Badge>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {errorMsg && (
+        <div className="p-4 rounded-lg border bg-rose-500/10 border-rose-500/30 text-rose-300 text-xs font-mono">
+          {errorMsg}
         </div>
+      )}
+
+      <Card>
+        {auditEntries.length === 0 ? (
+          <div className="text-center py-8 text-zinc-400 font-mono text-xs">
+            No ledger entries recorded yet. Execute a branch transaction to generate double-entry records.
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Entry ID</TableHead>
+                <TableHead>Tx Ref</TableHead>
+                <TableHead>Account</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Amount</TableHead>
+                <TableHead>Balance After</TableHead>
+                <TableHead>SHA-256 Hash</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {auditEntries.map((entry) => (
+                <TableRow key={entry.id}>
+                  <TableCell className="font-mono font-medium text-zinc-300">{entry.id}</TableCell>
+                  <TableCell
+                    className="font-mono text-[#00E676] max-w-[140px] truncate"
+                    title={entry.transaction_id}
+                  >
+                    {entry.transaction_id}
+                  </TableCell>
+                  <TableCell className="font-mono text-zinc-300">{entry.account_number}</TableCell>
+                  <TableCell>
+                    <Badge variant={entry.entry_type === 'DR' ? 'danger' : 'success'}>
+                      {entry.entry_type}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="font-mono tabular-nums font-semibold text-white">
+                    {formatRupiah(entry.amount)}
+                  </TableCell>
+                  <TableCell className="font-mono tabular-nums text-zinc-300">
+                    {formatRupiah(entry.balance_after)}
+                  </TableCell>
+                  <TableCell
+                    className="font-mono text-[10px] text-emerald-400/70 max-w-[140px] truncate"
+                    title={entry.current_hash}
+                  >
+                    {entry.current_hash}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="success">🔒 Verified</Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
       </Card>
     </div>
   );

@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: ["class"],
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
@@ -7,16 +8,50 @@ export default {
   theme: {
     extend: {
       colors: {
+        border: "hsl(var(--border))",
+        input: "hsl(var(--input))",
+        ring: "hsl(var(--ring))",
+        background: "hsl(var(--background))",
+        foreground: "hsl(var(--foreground))",
+        primary: {
+          DEFAULT: "hsl(var(--primary))",
+          foreground: "hsl(var(--primary-foreground))",
+        },
+        secondary: {
+          DEFAULT: "hsl(var(--secondary))",
+          foreground: "hsl(var(--secondary-foreground))",
+        },
+        destructive: {
+          DEFAULT: "hsl(var(--destructive))",
+          foreground: "hsl(var(--destructive-foreground))",
+        },
+        muted: {
+          DEFAULT: "hsl(var(--muted))",
+          foreground: "hsl(var(--muted-foreground))",
+        },
+        accent: {
+          DEFAULT: "hsl(var(--accent))",
+          foreground: "hsl(var(--accent-foreground))",
+        },
+        card: {
+          DEFAULT: "hsl(var(--card))",
+          foreground: "hsl(var(--card-foreground))",
+        },
         brand: {
-          primary: '#0F172A', // Slate 900
-          accent: '#2563EB',  // Blue 600
-          surface: '#F8FAFC', // Slate 50
+          primary: '#050807',  // Matrix / Terminal Pitch Black
+          accent: '#00E676',   // Bullish Trading Neon Green
+          surface: '#050807',  // Dark Canvas
         },
         status: {
-          success: '#16A34A', // Green 600
-          warning: '#D97706', // Amber 600
-          danger: '#DC2626',  // Red 600
+          success: '#00E676',  // Bullish Green
+          warning: '#F59E0B',  // Amber 500
+          danger: '#FF3B5C',   // Bearish Trading Red
         }
+      },
+      borderRadius: {
+        lg: "var(--radius)",
+        md: "calc(var(--radius) - 2px)",
+        sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
@@ -24,5 +59,5 @@ export default {
       }
     },
   },
-  plugins: [],
+  plugins: [require("tailwindcss-animate")],
 }

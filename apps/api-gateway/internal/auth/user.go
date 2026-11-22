@@ -41,6 +41,7 @@ type User struct {
 type UserRepository interface {
 	GetByUsername(ctx context.Context, username string) (*User, error)
 	GetByID(ctx context.Context, id string) (*User, error)
+	UpdateLastLogin(ctx context.Context, userID string, loginAt time.Time) error
 }
 
 // RefreshTokenStore tracks stateful refresh token validity for revocation on logout or compromise.

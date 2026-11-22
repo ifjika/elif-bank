@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/elif-bank/apps/api-gateway/internal/auth"
 )
@@ -40,6 +41,12 @@ func (r *MySQLUserRepository) GetByID(ctx context.Context, id string) (*auth.Use
 		LIMIT 1
 	`
 	return r.scanUser(r.db.QueryRowContext(ctx, query, id))
+}
+
+func (r *MySQLUserRepository) UpdateLastLogin(ctx context.Context, userID string, loginAt time.Time) error {
+	const query = `UPDATE app_users SET last_login_at = ? WHERE id = ?`
+	_, err := r.db.ExecContext(ctx, query, loginAt, userID)
+	return err
 }
 
 func (r *MySQLUserRepository) scanUser(row *sql.Row) (*auth.User, error) {
@@ -88,7 +95,7 @@ func SeedDemoUsersIfEmpty(ctx context.Context, db *sql.DB) error {
 	const branchQuery = `
 		INSERT IGNORE INTO bank_branches (id, branch_code, branch_name, address)
 		VALUES
-			('branch-jkt-01', 'JKT01', 'Elif Bank Sudirman Main Branch', 'Jl. Jend. Sudirman Kav. 52, Jakarta'),
+			('branch-jkt-01', 'JKT01', 'Elif Bank Sudirma1n Main Branch', 'Jl. Jend. Sudirman Kav. 52, Jakarta'),
 			('branch-hq', 'HQ001', 'Elif Bank Head Office', 'Menara Elif, Jakarta')
 	`
 	if _, err := tx.ExecContext(ctx, branchQuery); err != nil {

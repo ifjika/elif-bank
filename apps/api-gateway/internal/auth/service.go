@@ -97,6 +97,9 @@ func (s *AuthService) Login(ctx context.Context, username, password string) (*Lo
 		return nil, fmt.Errorf("failed to persist refresh session: %w", err)
 	}
 
+	// Best-effort audit timestamp update on app_users.last_login_at
+	_ = s.userRepo.UpdateLastLogin(ctx, user.ID, time.Now().UTC())
+
 	return &LoginResult{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,

@@ -1,6 +1,16 @@
+import { lazy, Suspense } from 'react';
 import { RouteObject } from 'react-router-dom';
-import { TellerDashboardPage } from './pages/TellerDashboardPage';
-import { CashTransactionPage } from './pages/CashTransactionPage';
+import {
+  TellerDashboardSkeleton,
+  CashTransactionSkeleton,
+} from '@/components/ui/PageSkeletons';
+
+const TellerDashboardPage = lazy(() =>
+  import('./pages/TellerDashboardPage').then((m) => ({ default: m.TellerDashboardPage }))
+);
+const CashTransactionPage = lazy(() =>
+  import('./pages/CashTransactionPage').then((m) => ({ default: m.CashTransactionPage }))
+);
 
 export const tellerRoutes: RouteObject[] = [
   {
@@ -8,11 +18,19 @@ export const tellerRoutes: RouteObject[] = [
     children: [
       {
         index: true,
-        element: <TellerDashboardPage />,
+        element: (
+          <Suspense fallback={<TellerDashboardSkeleton />}>
+            <TellerDashboardPage />
+          </Suspense>
+        ),
       },
       {
         path: 'cash',
-        element: <CashTransactionPage />,
+        element: (
+          <Suspense fallback={<CashTransactionSkeleton />}>
+            <CashTransactionPage />
+          </Suspense>
+        ),
       },
     ],
   },

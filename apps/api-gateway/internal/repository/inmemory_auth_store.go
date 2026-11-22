@@ -89,6 +89,10 @@ func (r *InMemoryUserRepository) GetByID(ctx context.Context, id string) (*auth.
 	return &copyUser, nil
 }
 
+func (r *InMemoryUserRepository) UpdateLastLogin(ctx context.Context, userID string, loginAt time.Time) error {
+	return nil
+}
+
 type refreshRecord struct {
 	userID    string
 	expiresAt time.Time

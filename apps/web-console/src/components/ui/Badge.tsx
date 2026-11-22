@@ -1,24 +1,34 @@
-import React from 'react';
+import * as React from 'react';
+import { cva, type VariantProps } from 'class-variance-authority';
+import { cn } from '@/lib/utils';
 
-interface BadgeProps {
-  children: React.ReactNode;
-  variant?: 'success' | 'warning' | 'danger' | 'neutral';
-  className?: string;
+const badgeVariants = cva(
+  'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold font-mono transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
+  {
+    variants: {
+      variant: {
+        default: 'border-transparent bg-primary text-primary-foreground shadow',
+        secondary: 'border-transparent bg-secondary text-secondary-foreground',
+        destructive: 'border-transparent bg-destructive text-destructive-foreground shadow',
+        outline: 'text-foreground border-border',
+        success: 'border-emerald-500/30 bg-emerald-500/15 text-[#00E676]',
+        warning: 'border-amber-500/30 bg-amber-500/15 text-amber-400',
+        danger: 'border-rose-500/30 bg-rose-500/15 text-rose-400',
+        neutral: 'border-zinc-700 bg-zinc-800/80 text-zinc-300',
+      },
+    },
+    defaultVariants: {
+      variant: 'default',
+    },
+  }
+);
+
+export interface BadgeProps
+  extends React.HTMLAttributes<HTMLDivElement>,
+    VariantProps<typeof badgeVariants> {}
+
+function Badge({ className, variant, ...props }: BadgeProps) {
+  return <div className={cn(badgeVariants({ variant }), className)} {...props} />;
 }
 
-export const Badge: React.FC<BadgeProps> = ({ children, variant = 'neutral', className = '' }) => {
-  const variantStyles = {
-    success: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    warning: 'bg-amber-50 text-amber-700 border-amber-200',
-    danger: 'bg-rose-50 text-rose-700 border-rose-200',
-    neutral: 'bg-slate-100 text-slate-700 border-slate-200',
-  };
-
-  return (
-    <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${variantStyles[variant]} ${className}`}
-    >
-      {children}
-    </span>
-  );
-};
+export { Badge, badgeVariants };
